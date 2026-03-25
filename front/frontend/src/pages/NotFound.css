@@ -1,0 +1,324 @@
+/* ================================================================
+   NotFound.css — Page 404 Attijaribank
+   Thème : sombre raffiné + accents or/jaune (cohérent avec l'app)
+================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap');
+
+:root {
+  --nf-bg:          #0a0a0f;
+  --nf-surface:     #12121a;
+  --nf-border:      rgba(255, 193, 7, 0.15);
+  --nf-gold:        #FFC107;
+  --nf-gold-light:  #FFD54F;
+  --nf-gold-dim:    rgba(255, 193, 7, 0.08);
+  --nf-white:       #f0ece3;
+  --nf-muted:       #6b6a72;
+  --nf-font-display: 'Playfair Display', Georgia, serif;
+  --nf-font-body:    'DM Sans', sans-serif;
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Wrapper ── */
+.notfound-wrapper {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--nf-bg);
+  overflow: hidden;
+  font-family: var(--nf-font-body);
+}
+
+/* ── Grille décorative ── */
+.notfound-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 193, 7, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 193, 7, 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 30%, transparent 100%);
+  pointer-events: none;
+}
+
+/* ── Orbes décoratifs ── */
+.notfound-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  animation: orbFloat 8s ease-in-out infinite;
+}
+
+.notfound-orb--1 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(255, 193, 7, 0.12) 0%, transparent 70%);
+  top: -100px;
+  right: -100px;
+  animation-delay: 0s;
+}
+
+.notfound-orb--2 {
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(255, 193, 7, 0.07) 0%, transparent 70%);
+  bottom: -80px;
+  left: -60px;
+  animation-delay: -4s;
+}
+
+@keyframes orbFloat {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50%       { transform: translateY(-30px) scale(1.05); }
+}
+
+/* ── Conteneur central ── */
+.notfound-container {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 60px 40px;
+  max-width: 600px;
+  width: 100%;
+  animation: fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Brand ── */
+.notfound-brand {
+  font-family: var(--nf-font-body);
+  font-weight: 500;
+  font-size: 20px;
+  color: var(--nf-white);
+  letter-spacing: 1px;
+  margin-bottom: 48px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.notfound-brand:hover { opacity: 1; }
+
+.notfound-brand span {
+  color: var(--nf-gold);
+}
+
+/* ── 404 Grand chiffre ── */
+.notfound-code {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 32px;
+  line-height: 1;
+}
+
+.notfound-digit {
+  font-family: var(--nf-font-display);
+  font-weight: 900;
+  font-size: clamp(100px, 18vw, 160px);
+  color: var(--nf-gold);
+  text-shadow:
+    0 0 60px rgba(255, 193, 7, 0.3),
+    0 0 120px rgba(255, 193, 7, 0.1);
+  animation: digitPulse 3s ease-in-out infinite;
+  display: inline-block;
+}
+
+.notfound-digit--last {
+  animation-delay: 0.4s;
+}
+
+/* Le "0" avec effet cercle animé */
+.notfound-zero {
+  position: relative;
+  display: inline-block;
+  width: clamp(80px, 14vw, 130px);
+  height: clamp(100px, 18vw, 160px);
+  animation: digitPulse 3s ease-in-out infinite;
+  animation-delay: 0.2s;
+}
+
+.notfound-zero-inner {
+  font-family: var(--nf-font-display);
+  font-weight: 900;
+  font-size: clamp(100px, 18vw, 160px);
+  color: transparent;
+  -webkit-text-stroke: 3px var(--nf-gold);
+  text-shadow: none;
+  filter: drop-shadow(0 0 20px rgba(255, 193, 7, 0.4));
+  display: block;
+  line-height: 1;
+}
+
+/* Petit point tournant autour du 0 */
+.notfound-zero::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--nf-gold);
+  border-radius: 50%;
+  top: 10%;
+  left: 50%;
+  transform-origin: 0 calc(clamp(40px, 7vw, 65px));
+  animation: orbitDot 3s linear infinite;
+  box-shadow: 0 0 12px var(--nf-gold);
+}
+
+@keyframes orbitDot {
+  from { transform: rotate(0deg) translateX(-5px); }
+  to   { transform: rotate(360deg) translateX(-5px); }
+}
+
+@keyframes digitPulse {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-8px); }
+}
+
+/* ── Divider ── */
+.notfound-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+  width: 240px;
+}
+
+.notfound-divider-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 193, 7, 0.4), transparent);
+}
+
+.notfound-divider-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--nf-gold);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--nf-gold);
+  animation: dotBlink 2s ease-in-out infinite;
+}
+
+@keyframes dotBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+/* ── Titre ── */
+.notfound-title {
+  font-family: var(--nf-font-display);
+  font-weight: 700;
+  font-size: clamp(22px, 4vw, 32px);
+  color: var(--nf-white);
+  margin-bottom: 16px;
+  letter-spacing: 0.5px;
+}
+
+/* ── Sous-titre ── */
+.notfound-subtitle {
+  font-size: 15px;
+  color: var(--nf-muted);
+  line-height: 1.7;
+  max-width: 420px;
+  margin-bottom: 40px;
+}
+
+/* ── Boutons ── */
+.notfound-actions {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 40px;
+}
+
+.notfound-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 28px;
+  border-radius: 4px;
+  font-family: var(--nf-font-body);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  border: none;
+  outline: none;
+}
+
+.notfound-btn--primary {
+  background: var(--nf-gold);
+  color: #0a0a0f;
+}
+
+.notfound-btn--primary:hover {
+  background: var(--nf-gold-light);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(255, 193, 7, 0.3);
+}
+
+.notfound-btn--secondary {
+  background: transparent;
+  color: var(--nf-muted);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.notfound-btn--secondary:hover {
+  border-color: rgba(255, 193, 7, 0.3);
+  color: var(--nf-gold);
+  transform: translateY(-2px);
+}
+
+.notfound-btn-icon {
+  font-size: 16px;
+  display: inline-block;
+  transition: transform 0.2s;
+}
+
+.notfound-btn--primary:hover .notfound-btn-icon {
+  transform: translateX(-3px);
+}
+
+/* ── Code d'erreur bas de page ── */
+.notfound-code-label {
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: rgba(255, 255, 255, 0.12);
+  text-transform: uppercase;
+  font-weight: 400;
+  font-family: 'Courier New', monospace;
+}
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  .notfound-container {
+    padding: 40px 24px;
+  }
+
+  .notfound-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .notfound-btn {
+    justify-content: center;
+  }
+
+  .notfound-zero::after {
+    display: none;
+  }
+}

@@ -1,0 +1,250 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --primary-color: #f39c12; /* Attijari Gold */
+  --success-color: #27ae60;
+  --danger-color: #e74c3c;
+  --blue-color: #3498db;
+  --purple-color: #9b59b6;
+  --text-dark: #2c3e50;
+  --bg-soft: #f8f9fa;
+}
+
+.admin-view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.header-text h2 { font-size: 1.8rem; font-weight: 800; color: var(--text-dark); margin: 0; }
+.header-text p { color: #7f8c8d; margin-top: 5px; }
+
+.header-action-btns {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-header {
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+}
+
+.btn-refresh { background-color: #fff; color: var(--text-dark); border: 1px solid #e0e0e0; }
+.btn-add { background-color: var(--text-dark); color: white; }
+.btn-header:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+
+/* Table Glass Design */
+.table-container-glass {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.04);
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.8);
+}
+
+.attijari-table-modern {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+
+.attijari-table-modern th {
+  padding: 15px 20px;
+  text-align: left;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #95a5a6;
+}
+
+.attijari-table-modern td {
+  padding: 15px 20px;
+  background-color: transparent;
+  border-bottom: 1px solid #f1f1f1;
+}
+
+/* User Identity Cell */
+.user-info-flex { display: flex; align-items: center; gap: 12px; }
+.user-avatar-small {
+  width: 35px; height: 35px;
+  background: #eee;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; color: var(--text-dark);
+}
+
+/* Tags & Badges */
+.role-tag {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.role-tag.admin { background: #ebf5ff; color: #3182ce; }
+.role-tag.employer { background: #fefcbf; color: #b7791f; }
+
+.status-dot-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.status-dot-pill.active { background: #d1fae5; color: #065f46; }
+.status-dot-pill.pending { background: #fff7ed; color: #9a3412; }
+
+/* HORIZONTAL ACTION WRAPPER */
+.horizontal-action-wrapper {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.icon-action-btn {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 40px;
+}
+
+.icon-action-btn.approve { background: var(--success-color); color: white; }
+.icon-action-btn.deactivate { background: #f39c12; color: white; }
+.icon-action-btn.role { background: #ecf0f1; color: var(--text-dark); }
+.icon-action-btn.pwd { background: #ecf0f1; }
+.icon-action-btn.delete { background: #fee2e2; color: #ef4444; }
+
+.icon-action-btn:hover {
+  transform: scale(1.05);
+  filter: brightness(0.9);
+}
+
+/* Modals Modern */
+.modal-glass-card {
+  background: white;
+  padding: 40px;
+  border-radius: 24px;
+  width: 420px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+  animation: modalSlide 0.3s ease-out;
+}
+
+.modal-glass-card input, .modal-glass-card select {
+  width: 100%;
+  padding: 12px 15px;
+  margin-bottom: 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  font-family: inherit;
+}
+
+.modal-actions-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.btn-confirm-glass { flex: 2; background: var(--text-dark); color: white; border: none; padding: 12px; border-radius: 12px; cursor: pointer; font-weight: 600; }
+.btn-cancel-glass { flex: 1; background: #f1f1f1; border: none; padding: 12px; border-radius: 12px; cursor: pointer; }
+
+@keyframes modalSlide {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
+/* --- Overlay de la Modale (Le conteneur de centrage) --- */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.4); /* Fond sombre transparent */
+  backdrop-filter: blur(5px);    /* Effet de flou sur l'arrière-plan */
+  display: flex;
+  justify-content: center;       /* Centrage horizontal */
+  align-items: center;           /* Centrage vertical */
+  z-index: 2000;                 /* Au-dessus de la barre latérale et du header */
+}
+
+/* --- Carte de la Modale --- */
+.modal-glass-card {
+  background: rgba(255, 255, 255, 0.95);
+  padding: 30px;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  animation: modalAppear 0.3s ease-out;
+}
+
+@keyframes modalAppear {
+  from { opacity: 0; transform: translateY(-20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* --- Éléments internes de la modale --- */
+.modal-glass-card h3 {
+  margin-top: 0;
+  color: #333;
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+}
+
+.modal-glass-card p {
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+}
+
+.modal-glass-card input, 
+.modal-glass-card select {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 1rem;
+  box-sizing: border-box; /* Évite que l'input dépasse */
+}
+
+.modal-actions-row {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.btn-cancel-glass {
+  background: #eee;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn-confirm-glass {
+  background: #ffcc00; /* Couleur Attijari */
+  color: #000;
+  border: none;
+  font-weight: bold;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+}

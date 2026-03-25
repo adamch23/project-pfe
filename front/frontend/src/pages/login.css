@@ -1,0 +1,156 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap');
+
+/* --- Reset & Base --- */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}
+
+/* --- Wrapper de centrage (Crucial) --- */
+.login-page-wrapper {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  justify-content: center; /* Centre horizontalement */
+  align-items: center;     /* Centre verticalement */
+  background-color: #f4f7f6;
+  background-image: radial-gradient(#d1d1d1 0.5px, transparent 0.5px);
+  background-size: 20px 20px;
+  font-family: 'Montserrat', sans-serif;
+}
+
+/* --- Boîte de connexion --- */
+.login-container {
+  background: #ffffff;
+  padding: 50px 45px;
+  border-radius: 4px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 420px;
+  border-top: 6px solid #ffcc00; /* Jaune Attijari */
+  position: relative;
+}
+
+.brand-logo {
+  text-align: center;
+  font-weight: 800;
+  font-size: 1.6rem;
+  color: #4a4a4a;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 5px;
+}
+
+.brand-logo span {
+  color: #ffcc00;
+}
+
+.login-container h1 {
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 35px;
+  color: #333;
+}
+
+/* --- Formulaire --- */
+.input-group {
+  margin-bottom: 25px;
+}
+
+.input-group label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #777;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.login-container input {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+  font-size: 1rem;
+  background-color: #fafafa;
+  transition: all 0.2s;
+}
+
+.login-container input:focus {
+  border-color: #ffcc00;
+  outline: none;
+  background-color: #fff;
+}
+
+.btn-login {
+  width: 100%;
+  padding: 16px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  background-color: #444; /* Gris foncé */
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 10px;
+}
+
+.btn-login:hover:not(:disabled) {
+  background-color: #222;
+}
+
+.btn-login:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* --- Erreurs --- */
+.error-box {
+  background-color: #fff5f5;
+  border-left: 4px solid #e53e3e;
+  padding: 12px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.error-message {
+  color: #c53030;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* --- Footer --- */
+.footer-links {
+  margin-top: 25px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+
+.footer-links a {
+  color: #4a4a4a;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.footer-links a:hover {
+  text-decoration: underline;
+}
+
+.security-notice {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
+  text-align: center;
+  font-size: 0.7rem;
+  color: #999;
+  line-height: 1.5;
+}

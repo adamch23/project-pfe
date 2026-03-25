@@ -1,0 +1,147 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap');
+
+/* --- Reset & Centrage --- */
+.signup-page-wrapper {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f4f7f6;
+  background-image: radial-gradient(#d1d1d1 0.5px, transparent 0.5px);
+  background-size: 20px 20px;
+  font-family: 'Montserrat', sans-serif;
+  margin: 0;
+}
+
+.signup-container {
+  background: #ffffff;
+  padding: 45px;
+  border-radius: 4px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 420px;
+  border-top: 6px solid #ffcc00;
+  position: relative;
+}
+
+.brand-logo {
+  text-align: center;
+  font-weight: 800;
+  font-size: 1.6rem;
+  color: #4a4a4a;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 5px;
+}
+
+.brand-logo span {
+  color: #ffcc00;
+}
+
+.signup-container h1 {
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 30px;
+  color: #333;
+}
+
+/* --- Formulaire --- */
+.input-group {
+  margin-bottom: 20px;
+}
+
+.input-group label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #777;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.signup-container input {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 2px;
+  font-size: 1rem;
+  background-color: #fafafa;
+  transition: all 0.2s;
+}
+
+.signup-container input:focus {
+  border-color: #ffcc00;
+  outline: none;
+  background-color: #fff;
+}
+
+.btn-signup {
+  width: 100%;
+  padding: 16px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  background-color: #444; /* Gris sombre Attijari */
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 15px;
+  transition: background 0.3s;
+}
+
+.btn-signup:hover:not(:disabled) {
+  background-color: #222;
+}
+
+/* --- Messages d'état --- */
+.message-box {
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+.message-box.error {
+  background-color: #fff5f5;
+  color: #c53030;
+  border: 1px solid #feb2b2;
+}
+
+.message-box.success {
+  background-color: #f0fff4;
+  color: #2f855a;
+  border: 1px solid #9ae6b4;
+}
+
+/* --- Footer & Securité --- */
+.footer-links {
+  margin-top: 25px;
+  text-align: center;
+  font-size: 0.8rem;
+}
+
+.footer-links a {
+  color: #4a4a4a;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.footer-links a:hover {
+  color: #ffcc00;
+}
+
+.security-notice {
+  margin-top: 35px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
+  text-align: center;
+  font-size: 0.7rem;
+  color: #999;
+  line-height: 1.5;
+}
