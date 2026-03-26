@@ -1,0 +1,193 @@
+/* ═══════════════════════════════════════════════════════════════
+   AccessBlocked.css
+   Overlay plein-écran — thème sécurité bancaire sombre
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Overlay ── */
+.ab-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(12px);
+  animation: ab-fade-in 0.3s ease;
+}
+
+@keyframes ab-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Card centrale ── */
+.ab-card {
+  background: linear-gradient(145deg, #0f1117 0%, #1a1d2e 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 20px;
+  padding: 48px 40px;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  box-shadow:
+    0 0 0 1px rgba(239, 68, 68, 0.1),
+    0 40px 80px rgba(0, 0, 0, 0.6),
+    0 0 60px rgba(239, 68, 68, 0.08);
+  animation: ab-slide-up 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes ab-slide-up {
+  from { transform: translateY(30px) scale(0.95); opacity: 0; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* ── Icône avec pulsation ── */
+.ab-icon-wrap {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ab-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(239, 68, 68, 0.4);
+  animation: ab-pulse 2s ease-out infinite;
+}
+
+.ab-pulse--2 {
+  animation-delay: 0.7s;
+}
+
+@keyframes ab-pulse {
+  0%   { transform: scale(1);   opacity: 0.6; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.ab-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1.5px solid rgba(239, 68, 68, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f87171;
+  position: relative;
+  z-index: 1;
+}
+
+.ab-icon svg {
+  width: 38px;
+  height: 38px;
+}
+
+/* ── Texte ── */
+.ab-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.3px;
+  margin: 0 0 6px;
+}
+
+.ab-subtitle {
+  font-size: 12px;
+  font-weight: 500;
+  color: #ef4444;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin: 0 0 20px;
+}
+
+.ab-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(239,68,68,0.3), transparent);
+  margin: 0 0 20px;
+}
+
+.ab-message {
+  font-size: 14.5px;
+  color: #94a3b8;
+  line-height: 1.7;
+  margin: 0 0 28px;
+}
+
+.ab-message strong {
+  color: #e2e8f0;
+}
+
+/* ── Barre de scan ── */
+.ab-scan-bar {
+  position: relative;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  height: 40px;
+  overflow: hidden;
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ab-scan-line {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(239,68,68,0.25), transparent);
+  animation: ab-scan 1.8s ease-in-out infinite;
+}
+
+@keyframes ab-scan {
+  0%   { left: -60%; }
+  100% { left: 120%; }
+}
+
+.ab-scan-label {
+  font-size: 12px;
+  color: #64748b;
+  letter-spacing: 0.5px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Bouton déconnexion ── */
+.ab-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 20px;
+}
+
+.ab-logout-btn:hover {
+  border-color: rgba(239,68,68,0.5);
+  color: #f87171;
+  background: rgba(239,68,68,0.06);
+}
+
+/* ── Note sécurité ── */
+.ab-security-note {
+  font-size: 11px;
+  color: #334155;
+  margin: 0;
+  letter-spacing: 0.3px;
+}

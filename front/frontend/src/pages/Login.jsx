@@ -2,7 +2,6 @@ import { useState, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
 import "./login.css";
 
-// ── Helper : extrait le message d'erreur de la réponse API ─────────
 function extractError(err) {
   const data = err.response?.data;
   if (!data) return "Erreur réseau. Veuillez réessayer.";
@@ -13,14 +12,13 @@ function extractError(err) {
 
 export default function Login() {
   const { login } = useContext(AuthContext);
-  const [email, setEmail] = useState("");
+  const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [message,  setMessage]  = useState("");
+  const [loading,  setLoading]  = useState(false);
 
-  // Validation locale avant envoi
   const validateLocally = () => {
-    if (!email.trim()) return "L'email est requis";
+    if (!email.trim())    return "L'email est requis";
     if (!/^[\w.-]+@[\w.-]+\.\w{2,}$/.test(email)) return "Format d'email invalide";
     if (!password.trim()) return "Le mot de passe est requis";
     return null;
@@ -29,15 +27,14 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
-
     const localError = validateLocally();
-    if (localError) {
-      setMessage(localError);
-      return;
-    }
+    if (localError) { setMessage(localError); return; }
 
     setLoading(true);
     try {
+      // AuthContext.login gère la redirection :
+      // → /face-verify si has_face_photo === true
+      // → /admin ou /dashboard sinon
       await login(email, password);
     } catch (err) {
       setMessage(extractError(err));
