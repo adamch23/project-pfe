@@ -18,6 +18,7 @@ import OSPipelineDashboard        from "./pages/OSPipelineDashboard";
 import AppPipelineDashboard       from "./pages/AppPipelineDashboard";
 import APILogsPipelineDashboard   from "./pages/Apilogspipelinedashboard";
 import NotFound                   from "./pages/NotFound";
+import AnomalyDashboard          from "./pages/AnomalyDashboard";
 
 // ── Redirection intelligente à la racine ─────────────────────────
 function RootRedirect() {
@@ -83,6 +84,8 @@ function App() {
             element={<PrivateRoute><AppPipelineDashboard /></PrivateRoute>} />
           <Route path="/APILogsPipelineDashboard"
             element={<PrivateRoute><APILogsPipelineDashboard /></PrivateRoute>} />
+     <Route path="/AnomalyDashboard"
+            element={<PrivateRoute><AnomalyDashboard /></PrivateRoute>} />
 
           {/* ── Admin uniquement ── */}
           <Route path="/admin"

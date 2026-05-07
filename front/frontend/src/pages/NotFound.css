@@ -1,84 +1,92 @@
-/* ================================================================
-   NotFound.css — Page 404 Attijaribank
-   Thème : sombre raffiné + accents or/jaune (cohérent avec l'app)
-================================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap');
-
+/* ─── ATTIJARI BRAND TOKENS ───────────────────────────────────────── */
 :root {
-  --nf-bg:          #0a0a0f;
-  --nf-surface:     #12121a;
-  --nf-border:      rgba(255, 193, 7, 0.15);
-  --nf-gold:        #FFC107;
-  --nf-gold-light:  #FFD54F;
-  --nf-gold-dim:    rgba(255, 193, 7, 0.08);
-  --nf-white:       #f0ece3;
-  --nf-muted:       #6b6a72;
-  --nf-font-display: 'Playfair Display', Georgia, serif;
-  --nf-font-body:    'DM Sans', sans-serif;
+  --atj-gold:        #FFB81C;
+  --atj-gold-light:  #FFD166;
+  --atj-gold-dim:    rgba(255, 184, 28, 0.12);
+  --atj-gold-glow:   rgba(255, 184, 28, 0.25);
+  --atj-red:         #E03E2D;
+  --atj-red-dim:     rgba(224, 62, 45, 0.1);
+  --atj-black:       #0A0A0F;
+  --atj-surface:     #111118;
+  --atj-surface2:    #18181F;
+  --atj-border:      rgba(255, 184, 28, 0.14);
+  --atj-white:       #F5F0E8;
+  --atj-muted:       #6B6A72;
+  --font-display:    'Playfair Display', Georgia, serif;
+  --font-body:       'Plus Jakarta Sans', sans-serif;
 }
 
-/* ── Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ── Wrapper ── */
-.notfound-wrapper {
+/* ─── WRAPPER ─────────────────────────────────────────────────────── */
+.nf-wrapper {
   position: relative;
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--nf-bg);
+  background: var(--atj-black);
+  font-family: var(--font-body);
   overflow: hidden;
-  font-family: var(--nf-font-body);
 }
 
-/* ── Grille décorative ── */
-.notfound-grid {
+/* ─── PARTICLE CANVAS ─────────────────────────────────────────────── */
+.nf-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── GRID ────────────────────────────────────────────────────────── */
+.nf-grid {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 193, 7, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 193, 7, 0.04) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 30%, transparent 100%);
+    linear-gradient(rgba(255,184,28,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,184,28,.04) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, black 30%, transparent 100%);
+  z-index: 0;
   pointer-events: none;
 }
 
-/* ── Orbes décoratifs ── */
-.notfound-orb {
+/* ─── DECORATIVE ORBS ─────────────────────────────────────────────── */
+.nf-orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
+  filter: blur(90px);
   pointer-events: none;
-  animation: orbFloat 8s ease-in-out infinite;
+  z-index: 0;
 }
 
-.notfound-orb--1 {
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, rgba(255, 193, 7, 0.12) 0%, transparent 70%);
-  top: -100px;
-  right: -100px;
-  animation-delay: 0s;
+.nf-orb--gold {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(255,184,28,.14) 0%, transparent 70%);
+  top: -120px;
+  right: -80px;
+  animation: orbFloat 10s ease-in-out infinite;
 }
 
-.notfound-orb--2 {
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, rgba(255, 193, 7, 0.07) 0%, transparent 70%);
+.nf-orb--red {
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(circle, rgba(224,62,45,.1) 0%, transparent 70%);
   bottom: -80px;
   left: -60px;
-  animation-delay: -4s;
+  animation: orbFloat 13s ease-in-out infinite reverse;
 }
 
 @keyframes orbFloat {
-  0%, 100% { transform: translateY(0px) scale(1); }
-  50%       { transform: translateY(-30px) scale(1.05); }
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%       { transform: translateY(-40px) scale(1.08); }
 }
 
-/* ── Conteneur central ── */
-.notfound-container {
+/* ─── CONTAINER ───────────────────────────────────────────────────── */
+.nf-container {
   position: relative;
   z-index: 10;
   display: flex;
@@ -86,239 +94,211 @@
   align-items: center;
   text-align: center;
   padding: 60px 40px;
-  max-width: 600px;
+  max-width: 640px;
   width: 100%;
-  animation: fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: nfFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(30px); }
+@keyframes nfFadeUp {
+  from { opacity: 0; transform: translateY(32px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Brand ── */
-.notfound-brand {
-  font-family: var(--nf-font-body);
-  font-weight: 500;
+/* ─── BRAND ───────────────────────────────────────────────────────── */
+.nf-brand {
+  font-family: var(--font-body);
   font-size: 20px;
-  color: var(--nf-white);
-  letter-spacing: 1px;
-  margin-bottom: 48px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: rgba(245, 240, 232, 0.5);
+  margin-bottom: 52px;
   cursor: pointer;
-  opacity: 0.7;
-  transition: opacity 0.2s;
+  transition: color 0.2s;
 }
+.nf-brand:hover { color: var(--atj-white); }
+.nf-brand span { color: var(--atj-gold); }
 
-.notfound-brand:hover { opacity: 1; }
-
-.notfound-brand span {
-  color: var(--nf-gold);
-}
-
-/* ── 404 Grand chiffre ── */
-.notfound-code {
+/* ─── 404 DISPLAY ─────────────────────────────────────────────────── */
+.nf-code-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 32px;
+  gap: 4px;
+  margin-bottom: 40px;
   line-height: 1;
 }
 
-.notfound-digit {
-  font-family: var(--nf-font-display);
+.nf-digit {
+  font-family: var(--font-display);
   font-weight: 900;
-  font-size: clamp(100px, 18vw, 160px);
-  color: var(--nf-gold);
+  font-size: clamp(100px, 16vw, 152px);
+  color: var(--atj-gold);
   text-shadow:
-    0 0 60px rgba(255, 193, 7, 0.3),
-    0 0 120px rgba(255, 193, 7, 0.1);
-  animation: digitPulse 3s ease-in-out infinite;
+    0 0 60px rgba(255,184,28,.35),
+    0 0 120px rgba(255,184,28,.12);
   display: inline-block;
 }
 
-.notfound-digit--last {
-  animation-delay: 0.4s;
+.nf-digit--1 { animation: digitBounce 3.2s ease-in-out infinite; }
+.nf-digit--2 { animation: digitBounce 3.2s ease-in-out infinite 0.5s; }
+
+@keyframes digitBounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-10px); }
 }
 
-/* Le "0" avec effet cercle animé */
-.notfound-zero {
+/* ─── ZERO WITH ORBIT ─────────────────────────────────────────────── */
+.nf-zero-wrap {
   position: relative;
-  display: inline-block;
-  width: clamp(80px, 14vw, 130px);
-  height: clamp(100px, 18vw, 160px);
-  animation: digitPulse 3s ease-in-out infinite;
-  animation-delay: 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: digitBounce 3.2s ease-in-out infinite 0.25s;
 }
 
-.notfound-zero-inner {
-  font-family: var(--nf-font-display);
-  font-weight: 900;
-  font-size: clamp(100px, 18vw, 160px);
-  color: transparent;
-  -webkit-text-stroke: 3px var(--nf-gold);
-  text-shadow: none;
-  filter: drop-shadow(0 0 20px rgba(255, 193, 7, 0.4));
-  display: block;
-  line-height: 1;
+.nf-zero-svg {
+  width: clamp(80px, 13vw, 124px);
+  height: clamp(95px, 15.5vw, 148px);
+  filter: drop-shadow(0 0 20px rgba(255,184,28,.4));
 }
 
-/* Petit point tournant autour du 0 */
-.notfound-zero::after {
-  content: '';
+.nf-orbit-dot {
   position: absolute;
   width: 10px;
   height: 10px;
-  background: var(--nf-gold);
+  background: var(--atj-gold);
   border-radius: 50%;
-  top: 10%;
+  box-shadow: 0 0 14px var(--atj-gold);
+  top: 12%;
   left: 50%;
-  transform-origin: 0 calc(clamp(40px, 7vw, 65px));
-  animation: orbitDot 3s linear infinite;
-  box-shadow: 0 0 12px var(--nf-gold);
+  transform-origin: 0 calc(clamp(40px, 6.5vw, 62px));
+  animation: orbit 3s linear infinite;
 }
 
-@keyframes orbitDot {
+@keyframes orbit {
   from { transform: rotate(0deg) translateX(-5px); }
   to   { transform: rotate(360deg) translateX(-5px); }
 }
 
-@keyframes digitPulse {
-  0%, 100% { transform: translateY(0); }
-  50%       { transform: translateY(-8px); }
-}
-
-/* ── Divider ── */
-.notfound-divider {
+/* ─── DIVIDER ─────────────────────────────────────────────────────── */
+.nf-divider {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 28px;
-  width: 240px;
+  gap: 10px;
+  margin-bottom: 32px;
+  width: 260px;
 }
 
-.notfound-divider-line {
+.nf-divider-line {
   flex: 1;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 193, 7, 0.4), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255,184,28,.4), transparent);
 }
 
-.notfound-divider-dot {
-  width: 6px;
-  height: 6px;
-  background: var(--nf-gold);
-  border-radius: 50%;
-  box-shadow: 0 0 8px var(--nf-gold);
-  animation: dotBlink 2s ease-in-out infinite;
+.nf-divider-diamond {
+  width: 8px;
+  height: 8px;
+  background: var(--atj-gold);
+  transform: rotate(45deg);
+  box-shadow: 0 0 10px var(--atj-gold);
+  animation: diamondPulse 2.4s ease-in-out infinite;
 }
 
-@keyframes dotBlink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
+@keyframes diamondPulse {
+  0%, 100% { opacity: 1; transform: rotate(45deg) scale(1); }
+  50%       { opacity: 0.4; transform: rotate(45deg) scale(0.7); }
 }
 
-/* ── Titre ── */
-.notfound-title {
-  font-family: var(--nf-font-display);
+/* ─── TITLE & SUBTITLE ────────────────────────────────────────────── */
+.nf-title {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 4vw, 34px);
   font-weight: 700;
-  font-size: clamp(22px, 4vw, 32px);
-  color: var(--nf-white);
+  color: var(--atj-white);
   margin-bottom: 16px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
 }
 
-/* ── Sous-titre ── */
-.notfound-subtitle {
+.nf-sub {
   font-size: 15px;
-  color: var(--nf-muted);
-  line-height: 1.7;
-  max-width: 420px;
-  margin-bottom: 40px;
+  color: var(--atj-muted);
+  line-height: 1.75;
+  max-width: 440px;
+  margin-bottom: 44px;
 }
 
-/* ── Boutons ── */
-.notfound-actions {
+/* ─── BUTTONS ─────────────────────────────────────────────────────── */
+.nf-actions {
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
   justify-content: center;
-  margin-bottom: 40px;
+  margin-bottom: 44px;
 }
 
-.notfound-btn {
+.nf-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 13px 28px;
-  border-radius: 4px;
-  font-family: var(--nf-font-body);
-  font-size: 14px;
-  font-weight: 500;
+  border-radius: 5px;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 700;
   letter-spacing: 0.5px;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   border: none;
   outline: none;
+  position: relative;
+  overflow: hidden;
 }
 
-.notfound-btn--primary {
-  background: var(--nf-gold);
-  color: #0a0a0f;
+.nf-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,.12);
+  opacity: 0;
+  transition: opacity 0.2s;
 }
+.nf-btn:hover::after { opacity: 1; }
+.nf-btn:active { transform: scale(0.97); }
 
-.notfound-btn--primary:hover {
-  background: var(--nf-gold-light);
+.nf-btn--primary {
+  background: var(--atj-gold);
+  color: #0A0A0F;
+}
+.nf-btn--primary:hover {
+  background: var(--atj-gold-light);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(255, 193, 7, 0.3);
+  box-shadow: 0 8px 28px rgba(255,184,28,.35);
 }
 
-.notfound-btn--secondary {
+.nf-btn--secondary {
   background: transparent;
-  color: var(--nf-muted);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--atj-muted);
+  border: 1px solid rgba(255,255,255,.1);
 }
-
-.notfound-btn--secondary:hover {
-  border-color: rgba(255, 193, 7, 0.3);
-  color: var(--nf-gold);
+.nf-btn--secondary:hover {
+  border-color: rgba(255,184,28,.35);
+  color: var(--atj-gold);
   transform: translateY(-2px);
 }
 
-.notfound-btn-icon {
-  font-size: 16px;
-  display: inline-block;
-  transition: transform 0.2s;
-}
-
-.notfound-btn--primary:hover .notfound-btn-icon {
-  transform: translateX(-3px);
-}
-
-/* ── Code d'erreur bas de page ── */
-.notfound-code-label {
-  font-size: 11px;
+/* ─── ERROR CODE FOOTER ───────────────────────────────────────────── */
+.nf-error-code {
+  font-size: 10px;
   letter-spacing: 3px;
-  color: rgba(255, 255, 255, 0.12);
+  color: rgba(255,255,255,.1);
   text-transform: uppercase;
-  font-weight: 400;
   font-family: 'Courier New', monospace;
 }
 
-/* ── Responsive ── */
+/* ─── RESPONSIVE ──────────────────────────────────────────────────── */
 @media (max-width: 480px) {
-  .notfound-container {
-    padding: 40px 24px;
-  }
-
-  .notfound-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .notfound-btn {
-    justify-content: center;
-  }
-
-  .notfound-zero::after {
-    display: none;
-  }
+  .nf-container { padding: 40px 24px; }
+  .nf-actions { flex-direction: column; align-items: stretch; }
+  .nf-btn { justify-content: center; }
+  .nf-orbit-dot { display: none; }
 }

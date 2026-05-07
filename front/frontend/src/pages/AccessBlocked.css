@@ -1,9 +1,21 @@
-/* ═══════════════════════════════════════════════════════════════
-   AccessBlocked.css
-   Overlay plein-écran — thème sécurité bancaire sombre
-   ═══════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-/* ── Overlay ── */
+/* ─── TOKENS ──────────────────────────────────────────────────────── */
+:root {
+  --ab-gold:    #FFB81C;
+  --ab-gold-d:  #E09F18;
+  --ab-red:     #E03E2D;
+  --ab-black:   #0A0A0F;
+  --ab-surface: #111118;
+  --ab-border:  rgba(255,184,28,.15);
+  --ab-white:   #F5F0E8;
+  --ab-muted:   #6B6A72;
+  --ab-font:    'Plus Jakarta Sans', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ─── OVERLAY ─────────────────────────────────────────────────────── */
 .ab-overlay {
   position: fixed;
   inset: 0;
@@ -11,183 +23,210 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.92);
-  backdrop-filter: blur(12px);
-  animation: ab-fade-in 0.3s ease;
+  background: rgba(0,0,0,.95);
+  backdrop-filter: blur(16px);
+  font-family: var(--ab-font);
+  animation: abFadeIn 0.3s ease;
+  padding: 24px;
 }
 
-@keyframes ab-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
+@keyframes abFadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-/* ── Card centrale ── */
+/* ─── CARD ────────────────────────────────────────────────────────── */
 .ab-card {
-  background: linear-gradient(145deg, #0f1117 0%, #1a1d2e 100%);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 20px;
-  padding: 48px 40px;
+  background: var(--ab-surface);
+  border: 1px solid var(--ab-border);
+  border-radius: 6px;
   width: 100%;
-  max-width: 420px;
+  max-width: 400px;
   text-align: center;
+  overflow: hidden;
   box-shadow:
-    0 0 0 1px rgba(239, 68, 68, 0.1),
-    0 40px 80px rgba(0, 0, 0, 0.6),
-    0 0 60px rgba(239, 68, 68, 0.08);
-  animation: ab-slide-up 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    0 0 0 1px rgba(255,184,28,.05),
+    0 40px 80px rgba(0,0,0,.7);
+  animation: abSlideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-@keyframes ab-slide-up {
-  from { transform: translateY(30px) scale(0.95); opacity: 0; }
+@keyframes abSlideUp {
+  from { transform: translateY(28px) scale(0.96); opacity: 0; }
   to   { transform: translateY(0) scale(1); opacity: 1; }
 }
 
-/* ── Icône avec pulsation ── */
-.ab-icon-wrap {
+/* Gold-to-red shimmer bar */
+.ab-top-bar {
+  height: 4px;
+  background: linear-gradient(90deg, var(--ab-gold), var(--ab-red), var(--ab-gold));
+  background-size: 200% 100%;
+  animation: abShimmer 2.5s ease infinite;
+}
+
+@keyframes abShimmer {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Brand */
+.ab-brand {
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(245,240,232,.3);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  padding: 28px 36px 0;
+  display: block;
+}
+.ab-brand span { color: var(--ab-gold); }
+
+/* ─── ICON ────────────────────────────────────────────────────────── */
+.ab-icon-zone {
   position: relative;
   width: 88px;
   height: 88px;
-  margin: 0 auto 28px;
+  margin: 24px auto 20px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.ab-pulse {
+.ab-ring {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 2px solid rgba(239, 68, 68, 0.4);
-  animation: ab-pulse 2s ease-out infinite;
+  border: 1.5px solid rgba(224,62,45,.4);
+  animation: abRing 2s ease-out infinite;
 }
 
-.ab-pulse--2 {
+.ab-ring--2 {
   animation-delay: 0.7s;
+  border-color: rgba(224,62,45,.25);
 }
 
-@keyframes ab-pulse {
-  0%   { transform: scale(1);   opacity: 0.6; }
-  100% { transform: scale(1.8); opacity: 0; }
+@keyframes abRing {
+  0%   { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(1.9); opacity: 0; }
 }
 
-.ab-icon {
-  width: 72px;
-  height: 72px;
+.ab-icon-bg {
+  width: 70px;
+  height: 70px;
   border-radius: 50%;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1.5px solid rgba(239, 68, 68, 0.4);
+  background: rgba(224,62,45,.08);
+  border: 1px solid rgba(224,62,45,.3);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #f87171;
+  color: #F87171;
   position: relative;
   z-index: 1;
 }
 
-.ab-icon svg {
-  width: 38px;
-  height: 38px;
-}
-
-/* ── Texte ── */
+/* ─── TEXT ────────────────────────────────────────────────────────── */
 .ab-title {
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 700;
-  color: #f1f5f9;
-  letter-spacing: -0.3px;
-  margin: 0 0 6px;
+  color: var(--ab-white);
+  margin-bottom: 5px;
 }
 
-.ab-subtitle {
-  font-size: 12px;
-  font-weight: 500;
-  color: #ef4444;
-  letter-spacing: 1.5px;
+.ab-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #F87171;
+  letter-spacing: 2px;
   text-transform: uppercase;
-  margin: 0 0 20px;
+  margin-bottom: 16px;
 }
 
 .ab-divider {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(239,68,68,0.3), transparent);
-  margin: 0 0 20px;
+  background: linear-gradient(90deg, transparent, rgba(255,184,28,.2), transparent);
+  margin: 0 36px 18px;
 }
 
 .ab-message {
-  font-size: 14.5px;
-  color: #94a3b8;
+  font-size: 13.5px;
+  color: var(--ab-muted);
   line-height: 1.7;
-  margin: 0 0 28px;
+  margin: 0 36px 22px;
 }
+.ab-message strong { color: var(--ab-white); }
 
-.ab-message strong {
-  color: #e2e8f0;
-}
-
-/* ── Barre de scan ── */
+/* ─── SCAN BAR ────────────────────────────────────────────────────── */
 .ab-scan-bar {
   position: relative;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 8px;
-  height: 40px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 4px;
+  height: 38px;
   overflow: hidden;
-  margin-bottom: 28px;
+  margin: 0 36px 22px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
 }
 
-.ab-scan-line {
+.ab-scan-sweep {
   position: absolute;
-  top: 0;
-  left: -100%;
-  width: 60%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(239,68,68,0.25), transparent);
-  animation: ab-scan 1.8s ease-in-out infinite;
+  top: 0; left: -100%;
+  width: 60%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,184,28,.18), transparent);
+  animation: abSweep 2s ease-in-out infinite;
 }
 
-@keyframes ab-scan {
-  0%   { left: -60%; }
-  100% { left: 120%; }
-}
+@keyframes abSweep { 0% { left: -60%; } 100% { left: 120%; } }
 
-.ab-scan-label {
-  font-size: 12px;
-  color: #64748b;
+.ab-scan-dot {
+  width: 6px; height: 6px;
+  background: var(--ab-gold);
+  border-radius: 50%;
+  animation: abDotBlink 1.2s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
+}
+@keyframes abDotBlink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+.ab-scan-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ab-muted);
   letter-spacing: 0.5px;
   position: relative;
   z-index: 1;
 }
 
-/* ── Bouton déconnexion ── */
-.ab-logout-btn {
+/* ─── LOGOUT BUTTON ───────────────────────────────────────────────── */
+.ab-logout {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   background: transparent;
-  border: 1px solid rgba(255,255,255,0.12);
-  color: #94a3b8;
-  font-size: 13px;
-  font-weight: 500;
-  padding: 10px 20px;
-  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.1);
+  color: var(--ab-muted);
+  font-family: var(--ab-font);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 10px 22px;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s ease;
   margin-bottom: 20px;
 }
 
-.ab-logout-btn:hover {
-  border-color: rgba(239,68,68,0.5);
-  color: #f87171;
-  background: rgba(239,68,68,0.06);
+.ab-logout:hover {
+  border-color: rgba(224,62,45,.4);
+  color: #F87171;
+  background: rgba(224,62,45,.06);
 }
 
-/* ── Note sécurité ── */
-.ab-security-note {
-  font-size: 11px;
-  color: #334155;
-  margin: 0;
+/* ─── NOTE ────────────────────────────────────────────────────────── */
+.ab-note {
+  font-size: 10px;
+  color: rgba(255,255,255,.15);
   letter-spacing: 0.3px;
+  padding: 0 36px 28px;
+  display: block;
 }

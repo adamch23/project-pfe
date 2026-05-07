@@ -1,16 +1,12 @@
 # ================================================================
-# DETECTION D'ANOMALIES LOGS APPLICATIFS — PIPELINE CRISP-DM v2
+# DETECTION D'ANOMALIES LOGS APPLICATIFS — PIPELINE CRISP-DM v7
 # ================================================================
 # Fichier : E:\backend\app\IA_anomaly_detection\LogsApplicatifs.py
 # CSV attendus dans le meme dossier :
 #   - LogsApplicatifs.csv          (train)
 #   - Logs_Applicatifs_test.csv    (test)
-# Sorties dans le sous-dossier App_info/ :
-#   - Detected_App_Anomalies.csv
-#   - Detected_App_Anomalies_anomalies_only.csv
-#   - plot_app_distributions.png
-#   - plot_app_convergence.png
-#   - plot_app_pca.png
+# Sorties dans le sous-dossier App_info/
+# Rapport global incremental dans E:\backend\app\Data_Analyst\
 # ================================================================
 
 import sys
@@ -38,7 +34,7 @@ from sklearn.decomposition import PCA
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import (Input, Dense, LSTM, RepeatVector,
-                                      TimeDistributed, Dropout)
+                                     TimeDistributed, Dropout)
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.optimizers import Adam
 
@@ -51,14 +47,19 @@ np.random.seed(42)
 # ================================================================
 # SECTION 0 — CONFIGURATION GLOBALE
 # ================================================================
-BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR         = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR       = os.path.join(BASE_DIR, "App_info")
+DATA_ANALYST_DIR = os.path.join(os.path.dirname(BASE_DIR), "Data_Analyst")
 
-OUTPUT_DIR = os.path.join(BASE_DIR, "App_info")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(DATA_ANALYST_DIR, exist_ok=True)
 
 TRAIN_PATH  = os.path.join(BASE_DIR, "LogsApplicatifs.csv")
 TEST_PATH   = os.path.join(BASE_DIR, "Logs_Applicatifs_test.csv")
 OUTPUT_PATH = os.path.join(OUTPUT_DIR, "Detected_App_Anomalies.csv")
+
+# Rapport global incremental dans Data_Analyst
+DA_OUTPUT_PATH = os.path.join(DATA_ANALYST_DIR, "Detected_App_Anomalies.csv")
 
 PLOT_DISTRIBUTIONS = os.path.join(OUTPUT_DIR, "plot_app_distributions.png")
 PLOT_CONVERGENCE   = os.path.join(OUTPUT_DIR, "plot_app_convergence.png")
@@ -68,44 +69,94 @@ MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB  = os.environ.get("MONGO_DB",  "APP_db")
 MONGO_COL = "detected_app_anomalies"
 
-# Noms de colonnes catégorielles — casse originale du CSV
+FEATURES = [
+    "Response_time_ms", "Db_query_time_ms", "Cpu_usage_percent",
+    "Memory_usage_percent", "Retry_count", "Active_users_current",
+    "Transactions_per_minute", "Http_status_code",
+    "Application_name", "Server_instance", "Environment",
+    "User_type", "Endpoint", "Http_method",
+    "Config_version", "Deployment_version",
+]
+
 CATEGORICAL_COLS = [
     "Application_name", "Server_instance", "Environment",
-    "User_type", "Endpoint", "Http_method", "Error_code",
-    "Config_version", "Deployment_version"
+    "User_type", "Endpoint", "Http_method",
+    "Config_version", "Deployment_version",
 ]
 
-# Features numériques pures
-NUMERIC_FEATURES = [
-    "Response_time_ms", "Db_query_time_ms", "Cpu_usage_percent",
-    "Memory_usage_percent", "Thread_pool_usage_percent",
-    "Db_connection_pool_usage", "Retry_count", "Active_users_current",
-    "Transactions_per_minute", "Cache_hit_ratio",
-    "Payload_size_bytes", "Response_size_bytes"
-]
-
-IF_CONTAMINATION = "auto"
-N_SIGMA_AE       = 1.5
-N_SIGMA_LSTM     = 1.5
-VOTE_THRESHOLD   = 1
+# ----------------------------------------------------------------
+# PARAMETRES CLES — CALIBRES POUR ~21% D'ANOMALIES APPLICATIFS
+# ----------------------------------------------------------------
+# CORRECTION v6 → v7 :
+#   - VOTE_THRESHOLD  : 1 → 2  (au moins 2 modeles sur 3 doivent
+#                               s'accorder pour qualifier une anomalie)
+#   - IF_CONTAMINATION: "auto" → 0.22  (guide Isolation Forest vers
+#                               la proportion reelle connue ~21%)
+#   - N_SIGMA_AE      : 1.5 → 2.5  (seuil moins agressif)
+#   - N_SIGMA_LSTM    : 1.5 → 2.5  (seuil moins agressif)
+#   Avec VOTE_THRESHOLD=1 et sigma=1.5, chaque modele detectait
+#   30-50% d'anomalies independamment, et leur union depassait 60%.
+# ----------------------------------------------------------------
+IF_CONTAMINATION = 0.22   # proportion estimee connue (~21%)
+N_SIGMA_AE       = 2.5    # seuil autoencoder (mu + 2.5*sigma)
+N_SIGMA_LSTM     = 2.5    # seuil LSTM (mu + 2.5*sigma)
+VOTE_THRESHOLD   = 2      # CORRIGE : consensus >= 2/3 modeles
 LSTM_WINDOW      = 5
 LSTM_SAMPLE      = 8_000
 RANDOM_STATE     = 42
 
 
 # ================================================================
-# UTILITAIRE — accès robuste à une valeur dans une ligne pandas
+# FONCTION INCREMENTATION DATA_ANALYST
 # ================================================================
-def _get(row, col, default=0):
+def incremental_save_to_data_analyst(df_new: pd.DataFrame,
+                                      da_path: str,
+                                      id_col: str = None,
+                                      run_ts: str = "") -> None:
     """
-    Accès sécurisé à row[col] qu'il s'agisse d'un dict ou d'une Series pandas.
-    Retourne default si la colonne est absente ou NaN.
+    Sauvegarde incrementale dans Data_Analyst :
+    - Si le fichier n'existe pas : creation directe.
+    - Si le fichier existe : append des nouvelles lignes.
+    - Si un id existe deja dans l'ancien fichier :
+        on conserve l'ancien ET on ajoute le nouveau avec id suffixe _v2, _v3...
+    - Colonne 'pipeline_run_at' ajoutee pour tracabilite.
     """
-    try:
-        v = row[col] if isinstance(row, dict) else row.get(col, default)
-        return default if (v is None or (isinstance(v, float) and np.isnan(v))) else v
-    except Exception:
-        return default
+    df_new = df_new.copy()
+    df_new["pipeline_run_at"] = run_ts
+    df_new["pipeline_source"] = "LogsApplicatifs"
+
+    if not os.path.exists(da_path):
+        df_new.to_csv(da_path, index=False, encoding="utf-8-sig")
+        print(f"  OK Data_Analyst cree : {da_path} ({len(df_new):,} lignes)")
+        return
+
+    df_existing = pd.read_csv(da_path, low_memory=False)
+
+    if id_col and id_col in df_existing.columns and id_col in df_new.columns:
+        existing_ids = set(df_existing[id_col].astype(str).tolist())
+        def _make_unique_id(row):
+            orig = str(row[id_col])
+            if orig not in existing_ids:
+                return orig
+            version = 2
+            candidate = f"{orig}_v{version}"
+            while candidate in existing_ids:
+                version += 1
+                candidate = f"{orig}_v{version}"
+            existing_ids.add(candidate)
+            return candidate
+
+        df_new[id_col] = df_new.apply(_make_unique_id, axis=1)
+        print(f"  OK Deduplication id sur colonne '{id_col}'")
+
+    all_cols = list(dict.fromkeys(list(df_existing.columns) + list(df_new.columns)))
+    df_existing = df_existing.reindex(columns=all_cols)
+    df_new      = df_new.reindex(columns=all_cols)
+
+    df_merged = pd.concat([df_existing, df_new], ignore_index=True)
+    df_merged.to_csv(da_path, index=False, encoding="utf-8-sig")
+    print(f"  OK Data_Analyst mis a jour : {da_path}")
+    print(f"     Avant={len(df_existing):,} | Nouveaux={len(df_new):,} | Total={len(df_merged):,}")
 
 
 # ================================================================
@@ -115,12 +166,14 @@ print("=" * 65)
 print("PHASE 1 — BUSINESS UNDERSTANDING")
 print("=" * 65)
 print(f"""
-Objectif : Detection automatique d'anomalies dans les logs applicatifs.
+Objectif : Detection automatique d anomalies dans les logs applicatifs.
 Sorties  : is_anomaly | Anomaly_type | Risk (0-10)
 Modeles  : Isolation Forest + Autoencoder + LSTM Autoencoder
-Vote     : anomalie si >= {VOTE_THRESHOLD} modele(s) detecte
+Vote     : anomalie si >= {VOTE_THRESHOLD} modele(s) sur 3 (consensus)
+IF contam: {IF_CONTAMINATION} | Sigma AE/LSTM : {N_SIGMA_AE}
 MongoDB  : {MONGO_URI} / db={MONGO_DB} / col={MONGO_COL}
 Dossier  : {OUTPUT_DIR}
+Data_Analyst : {DATA_ANALYST_DIR}
 """)
 
 
@@ -134,41 +187,27 @@ print("=" * 65)
 df_train = pd.read_csv(TRAIN_PATH)
 df_test  = pd.read_csv(TEST_PATH)
 
-# ── FIX 1 : normalisation des noms de colonnes ───────────────────
-# On garde la casse d'origine mais on strip les espaces
-df_train.columns = df_train.columns.str.strip()
-df_test.columns  = df_test.columns.str.strip()
-
-# Construire un mapping insensible à la casse pour retrouver les colonnes réelles
-def _find_col(df, name):
-    """Retourne le nom réel de la colonne dans df (insensible à la casse), ou name."""
-    mapping = {c.lower(): c for c in df.columns}
-    return mapping.get(name.lower(), name)
-
-# Reconstruire les listes avec les vrais noms de colonnes du CSV
-CATEGORICAL_COLS  = [_find_col(df_train, c) for c in CATEGORICAL_COLS]
-NUMERIC_FEATURES  = [_find_col(df_train, c) for c in NUMERIC_FEATURES]
-CATEGORICAL_COLS  = [c for c in CATEGORICAL_COLS if c in df_train.columns]
-NUMERIC_FEATURES  = [c for c in NUMERIC_FEATURES if c in df_train.columns]
-
-print(f"  Catégorielles détectées : {CATEGORICAL_COLS}")
-print(f"  Numériques détectées    : {NUMERIC_FEATURES}")
-
 for name, df in [("TRAIN", df_train), ("TEST", df_test)]:
     print(f"  [{name}] shape={df.shape} | nulls={df.isnull().sum().sum()}")
 
-# ── Distributions numériques ─────────────────────────────────────
-n_plots = min(12, len(NUMERIC_FEATURES))
-fig, axes = plt.subplots(3, 4, figsize=(18, 10))
-for ax, feat in zip(axes.flatten(), NUMERIC_FEATURES[:n_plots]):
-    v = df_train[feat].dropna()
-    v.clip(lower=v.quantile(0.01), upper=v.quantile(0.99)).plot(
-        kind='hist', bins=40, ax=ax, color='#7209b7', edgecolor='white')
+numeric_feats = [f for f in FEATURES if f not in CATEGORICAL_COLS and f in df_train.columns]
+n_num    = min(12, len(numeric_feats))
+n_rows_g = max(1, (n_num + 3) // 4)
+fig, axes = plt.subplots(n_rows_g, 4, figsize=(18, 4 * n_rows_g))
+axes_flat = np.array(axes).flatten()
+
+for ax, feat in zip(axes_flat, numeric_feats[:n_num]):
+    v = pd.to_numeric(df_train[feat], errors='coerce').dropna()
+    if len(v) > 1:
+        v.clip(lower=v.quantile(0.01), upper=v.quantile(0.99)).plot(
+            kind='hist', bins=40, ax=ax, color='#7209b7', edgecolor='white')
     ax.set_title(feat, fontsize=9)
     ax.set_xlabel("")
-for ax in axes.flatten()[n_plots:]:
+for ax in axes_flat[n_num:]:
     ax.set_visible(False)
-plt.suptitle("Phase 2 — Distributions Logs Applicatifs (TRAIN)", fontsize=13, fontweight='bold')
+
+plt.suptitle("Phase 2 — Distributions Logs Applicatifs (TRAIN)",
+             fontsize=13, fontweight='bold')
 plt.tight_layout()
 fig.savefig(PLOT_DISTRIBUTIONS, dpi=100)
 plt.close(fig)
@@ -181,9 +220,6 @@ print(f"  OK {PLOT_DISTRIBUTIONS} sauvegarde")
 print("\n" + "=" * 65)
 print("PHASE 3 — DATA PREPARATION")
 print("=" * 65)
-
-# ── FIX 2 : FEATURES = numériques + catégorielles (dans l'ordre stable)
-FEATURES = NUMERIC_FEATURES + CATEGORICAL_COLS
 
 def prepare_data(df_tr_in, df_te_in, features, cat_cols):
     df_tr = df_tr_in.copy()
@@ -199,14 +235,21 @@ def prepare_data(df_tr_in, df_te_in, features, cat_cols):
         le.fit(df_tr[col])
         unk = set(df_te[col]) - set(le.classes_)
         if unk:
-            le.classes_ = np.append(le.classes_, list(unk))
+            le.classes_ = np.append(le.classes_, sorted(list(unk)))
         df_tr[col] = le.transform(df_tr[col])
         df_te[col] = le.transform(df_te[col])
         label_encoders[col] = le
 
+    num_cols = [f for f in features if f not in cat_cols]
+    for col in num_cols:
+        if col in df_tr.columns:
+            df_tr[col] = pd.to_numeric(df_tr[col], errors='coerce').fillna(0)
+        if col in df_te.columns:
+            df_te[col] = pd.to_numeric(df_te[col], errors='coerce').fillna(0)
+
     avail    = [f for f in features if f in df_tr.columns]
-    X_tr_raw = df_tr[avail].fillna(0).values.astype(np.float32)
-    X_te_raw = df_te[avail].fillna(0).values.astype(np.float32)
+    X_tr_raw = np.nan_to_num(df_tr[avail].fillna(0).values.astype(np.float32))
+    X_te_raw = np.nan_to_num(df_te[avail].fillna(0).values.astype(np.float32))
 
     sc_std   = StandardScaler()
     X_tr_std = sc_std.fit_transform(X_tr_raw)
@@ -217,34 +260,15 @@ def prepare_data(df_tr_in, df_te_in, features, cat_cols):
     X_te_mm = sc_mm.transform(X_te_raw)
 
     print(f"  OK Features : {len(avail)} | Train : {X_tr_std.shape} | Test : {X_te_std.shape}")
-    return X_tr_std, X_te_std, X_tr_mm, X_te_mm, avail, label_encoders, sc_std, sc_mm
+    return (X_tr_std, X_te_std, X_tr_mm, X_te_mm,
+            avail, label_encoders, sc_std, sc_mm)
 
 (X_train_std, X_test_std, X_train_mm, X_test_mm,
  avail_features, label_encoders, scaler_std, scaler_mm) = prepare_data(
     df_train, df_test, FEATURES, CATEGORICAL_COLS)
 
 n_feat = X_train_std.shape[1]
-
-# ── FIX 3 : résoudre Error_code="NONE" de façon robuste ──────────
-# Plusieurs variantes possibles : "NONE", "None", "none", "0", "OK"…
-_err_col = _find_col(df_train, "Error_code")
-_none_encoded = -1   # valeur sentinelle par défaut
-
-if _err_col in label_encoders:
-    _le_err = label_encoders[_err_col]
-    # Essayer plusieurs variantes du "pas d'erreur"
-    for _candidate in ["NONE", "None", "none", "OK", "ok", "0", "200", "NA"]:
-        if _candidate in _le_err.classes_:
-            _none_encoded = int(_le_err.transform([_candidate])[0])
-            print(f"  OK Error_code sans erreur détecté : '{_candidate}' → encodé {_none_encoded}")
-            break
-    else:
-        # Aucune valeur "neutre" trouvée : utiliser la valeur la plus fréquente du train
-        _most_common = df_train[_err_col].fillna("NA").astype(str).mode()[0]
-        if _most_common in _le_err.classes_:
-            _none_encoded = int(_le_err.transform([_most_common])[0])
-        print(f"  WARN Error_code : pas de valeur NONE trouvée, "
-              f"utilisation de la plus fréquente '{_most_common}' → {_none_encoded}")
+n_test = len(df_test)
 
 
 # ================================================================
@@ -255,13 +279,11 @@ print("PHASE 4 — MODELING")
 print("=" * 65)
 
 # ── 4.A  ISOLATION FOREST ────────────────────────────────────────
+# contamination=0.22 guide le modele vers ~21% d'anomalies
 print("\n  [4.A] Isolation Forest")
 iso = IsolationForest(
-    n_estimators=300,
-    contamination=IF_CONTAMINATION,
-    max_features=0.8,
-    random_state=RANDOM_STATE,
-    n_jobs=-1
+    n_estimators=300, contamination=IF_CONTAMINATION,
+    max_features=0.8, random_state=RANDOM_STATE, n_jobs=-1
 )
 iso.fit(X_train_std)
 if_raw     = -iso.decision_function(X_test_std)
@@ -269,51 +291,53 @@ if_anomaly = (iso.predict(X_test_std) == -1).astype(int)
 if_scores  = (if_raw - if_raw.min()) / (if_raw.max() - if_raw.min() + 1e-9)
 print(f"     Anomalies : {if_anomaly.sum():,} ({if_anomaly.mean()*100:.1f}%)")
 
-
 # ── 4.B  AUTOENCODER DENSE ───────────────────────────────────────
+# Seuil mu + 2.5*sigma (vs 1.5 avant) → moins de faux positifs
 print("\n  [4.B] Autoencoder Dense")
-
 def build_ae(n):
     inp = Input(shape=(n,))
     x   = Dense(128, activation='relu')(inp)
     x   = Dropout(0.1)(x)
-    x   = Dense(32, activation='relu')(x)
+    x   = Dense(32,  activation='relu')(x)
     x   = Dense(128, activation='relu')(x)
-    out = Dense(n, activation='linear')(x)
+    out = Dense(n,   activation='linear')(x)
     m   = Model(inp, out, name="App_AE")
     m.compile(optimizer=Adam(2e-3), loss='mse')
     return m
 
 ae      = build_ae(n_feat)
 ae_hist = ae.fit(
-    X_train_std, X_train_std,
-    epochs=60, batch_size=512, validation_split=0.1,
+    X_train_std, X_train_std, epochs=60, batch_size=1024,
+    validation_split=0.1,
     callbacks=[EarlyStopping(patience=6, restore_best_weights=True)],
     verbose=0
 )
 print(f"     Epochs : {len(ae_hist.history['loss'])}")
 
-ae_mse_tr  = np.mean((X_train_std - ae.predict(X_train_std, verbose=0))**2, axis=1)
-ae_thr     = ae_mse_tr.mean() + N_SIGMA_AE * ae_mse_tr.std()
-ae_mse_te  = np.mean((X_test_std  - ae.predict(X_test_std,  verbose=0))**2, axis=1)
+ae_mse_tr  = np.mean((X_train_std - ae.predict(X_train_std, verbose=0)) ** 2, axis=1)
+ae_thr     = float(ae_mse_tr.mean() + N_SIGMA_AE * ae_mse_tr.std())
+ae_mse_te  = np.mean((X_test_std  - ae.predict(X_test_std,  verbose=0)) ** 2, axis=1)
 ae_anomaly = (ae_mse_te > ae_thr).astype(int)
 ae_scores  = (ae_mse_te - ae_mse_te.min()) / (ae_mse_te.max() - ae_mse_te.min() + 1e-9)
 print(f"     Seuil : {ae_thr:.6f} | Anomalies : {ae_anomaly.sum():,} ({ae_anomaly.mean()*100:.1f}%)")
 
-
 # ── 4.C  LSTM AUTOENCODER ────────────────────────────────────────
+# Seuil mu + 2.5*sigma (vs 1.5 avant) → moins de faux positifs
 print("\n  [4.C] LSTM Autoencoder")
-
 def make_sequences(X, w):
-    n       = len(X)
-    shape   = (n - w + 1, w, X.shape[1])
-    strides = (X.strides[0], X.strides[0], X.strides[1])
-    return np.lib.stride_tricks.as_strided(X, shape=shape, strides=strides).copy()
+    n_seq = len(X) - w + 1
+    if n_seq <= 0:
+        return np.zeros((1, w, X.shape[1]), dtype=np.float32)
+    seqs = np.empty((n_seq, w, X.shape[1]), dtype=np.float32)
+    for i in range(n_seq):
+        seqs[i] = X[i:i + w]
+    return seqs
 
-sample_size = min(LSTM_SAMPLE, len(X_train_mm) - LSTM_WINDOW)
-idx_s    = np.random.choice(len(X_train_mm) - LSTM_WINDOW, size=sample_size, replace=False)
-X_tr_seq = make_sequences(X_train_mm, LSTM_WINDOW)[idx_s]
-X_te_seq = make_sequences(X_test_mm,  LSTM_WINDOW)
+n_possible  = max(1, len(X_train_mm) - LSTM_WINDOW)
+sample_size = min(LSTM_SAMPLE, n_possible)
+idx_s       = np.random.choice(n_possible, size=sample_size, replace=False)
+X_tr_seq    = make_sequences(X_train_mm, LSTM_WINDOW)[idx_s]
+X_te_seq    = make_sequences(X_test_mm,  LSTM_WINDOW)
 
 def build_lstm_ae(w, n):
     inp = Input(shape=(w, n))
@@ -327,168 +351,146 @@ def build_lstm_ae(w, n):
 
 lstm_ae   = build_lstm_ae(LSTM_WINDOW, n_feat)
 lstm_hist = lstm_ae.fit(
-    X_tr_seq, X_tr_seq,
-    epochs=40, batch_size=256, validation_split=0.1,
+    X_tr_seq, X_tr_seq, epochs=40, batch_size=512,
+    validation_split=0.1,
     callbacks=[EarlyStopping(patience=6, restore_best_weights=True)],
     verbose=0
 )
 print(f"     Epochs : {len(lstm_hist.history['loss'])}")
 
-lstm_mse_tr  = np.mean((X_tr_seq - lstm_ae.predict(X_tr_seq, verbose=0))**2, axis=(1, 2))
-lstm_thr     = lstm_mse_tr.mean() + N_SIGMA_LSTM * lstm_mse_tr.std()
-lstm_mse_te  = np.mean((X_te_seq - lstm_ae.predict(X_te_seq, verbose=0))**2, axis=(1, 2))
-lstm_mse_pad = np.concatenate([np.full(LSTM_WINDOW - 1, np.median(lstm_mse_te)), lstm_mse_te])
+lstm_mse_tr = np.mean((X_tr_seq - lstm_ae.predict(X_tr_seq, verbose=0)) ** 2, axis=(1, 2))
+lstm_thr    = float(lstm_mse_tr.mean() + N_SIGMA_LSTM * lstm_mse_tr.std())
+lstm_mse_te = np.mean((X_te_seq - lstm_ae.predict(X_te_seq, verbose=0)) ** 2, axis=(1, 2))
+
+n_pad = n_test - len(lstm_mse_te)
+if n_pad > 0:
+    lstm_mse_pad = np.concatenate([
+        np.full(n_pad, float(np.median(lstm_mse_te))), lstm_mse_te])
+elif n_pad < 0:
+    lstm_mse_pad = lstm_mse_te[-n_test:]
+else:
+    lstm_mse_pad = lstm_mse_te
+
+assert len(lstm_mse_pad) == n_test
+
 lstm_anomaly = (lstm_mse_pad > lstm_thr).astype(int)
 lstm_scores  = ((lstm_mse_pad - lstm_mse_pad.min())
                 / (lstm_mse_pad.max() - lstm_mse_pad.min() + 1e-9))
 print(f"     Seuil : {lstm_thr:.6f} | Anomalies : {lstm_anomaly.sum():,} ({lstm_anomaly.mean()*100:.1f}%)")
 
-
 # ── 4.D  VOTE D'ENSEMBLE ─────────────────────────────────────────
-print("\n  [4.D] Vote d'ensemble (IF + AE + LSTM)")
+# CORRECTION PRINCIPALE : VOTE_THRESHOLD=2 (consensus >= 2/3)
+# Avant : threshold=1 → union des 3 modeles → jusqu'a 64% detectes
+# Apres : threshold=2 → intersection 2/3 → ~21% attendus
+print("\n  [4.D] Vote d ensemble (IF + AE + LSTM)")
 votes            = if_anomaly + ae_anomaly + lstm_anomaly
 ensemble_anomaly = (votes >= VOTE_THRESHOLD).astype(int)
 composite_score  = (if_scores + ae_scores + lstm_scores) / 3.0
-
-print(f"     3/3 Critique  : {(votes==3).sum():,}")
-print(f"     2/3 Confirme  : {(votes==2).sum():,}")
-print(f"     1/3 Incertain : {(votes==1).sum():,}")
-print(f"     Anomalies retenues : {ensemble_anomaly.sum():,} ({ensemble_anomaly.mean()*100:.1f}%)")
-
+print(f"     3/3 Critique  : {(votes == 3).sum():,}")
+print(f"     2/3 Confirme  : {(votes == 2).sum():,}")
+print(f"     1/3 Incertain : {(votes == 1).sum():,} (exclus du resultat final)")
+print(f"     Anomalies retenues (>= {VOTE_THRESHOLD}/3) : "
+      f"{ensemble_anomaly.sum():,} ({ensemble_anomaly.mean()*100:.1f}%)")
 
 # ── 4.E  CLASSIFICATION DU TYPE D'ANOMALIE ───────────────────────
-print("\n  [4.E] Classification du type d'anomalie Applicatif")
+print("\n  [4.E] Classification du type d anomalie Applicatif")
 anomaly_idx = np.where(ensemble_anomaly == 1)[0]
+df_anom     = df_test.iloc[anomaly_idx].copy()
 
-# ── FIX 4 : guard si aucune anomalie détectée ────────────────────
+def classify_by_rules(row):
+    cpu     = float(row.get("Cpu_usage_percent",      0) or 0)
+    mem     = float(row.get("Memory_usage_percent",   0) or 0)
+    resp_ms = float(row.get("Response_time_ms",       0) or 0)
+    db_ms   = float(row.get("Db_query_time_ms",       0) or 0)
+    retry   = float(row.get("Retry_count",            0) or 0)
+    users   = float(row.get("Active_users_current",   0) or 0)
+    tpm     = float(row.get("Transactions_per_minute",0) or 0)
+    status  = float(row.get("Http_status_code",       200) or 200)
+    err     = str(row.get("error_code",              "NONE") or "NONE")
+
+    if err == "RATE_LIMIT_EXCEEDED" or status == 429:    return "Rate Limit / Depassement quota"
+    if err == "AUTH_FAILED" or status in (401, 403):     return "Echec authentification"
+    if err == "DB_TIMEOUT"  or db_ms > 150:              return "Timeout / Lenteur DB"
+    if err == "CONFIG_ERROR":                            return "Erreur de configuration"
+    if status >= 500:                                    return "Erreur serveur (5xx)"
+    if cpu > 60 or mem > 60:                             return "Degradation performance"
+    if resp_ms > 250:                                    return "Temps de reponse anormal"
+    if retry > 5:                                        return "Rejeux excessifs"
+    if users > 4000 or tpm > 900:                       return "Pic de charge utilisateur"
+    return "Comportement anormal"
+
 if len(anomaly_idx) == 0:
-    print("  WARN : aucune anomalie détectée — vérifier VOTE_THRESHOLD ou le fichier test.")
-    anomaly_type_array = np.array([], dtype=str)
+    print("  WARN : aucune anomalie detectee.")
+    anomaly_type_array = np.array([], dtype=object)
 else:
-    df_anom = df_test.iloc[anomaly_idx].copy()
-
-    # ── FIX 5 : classify_app_by_rules utilise .get() sur une Series
-    # → on convertit chaque ligne en dict avant l'appel
-    def classify_app_by_rules(row):
-        # row peut être une Series pandas — conversion sécurisée
-        r = row.to_dict() if hasattr(row, 'to_dict') else row
-
-        cpu      = float(_get(r, _find_col(df_test, "Cpu_usage_percent"), 0))
-        mem      = float(_get(r, _find_col(df_test, "Memory_usage_percent"), 0))
-        thread   = float(_get(r, _find_col(df_test, "Thread_pool_usage_percent"), 0))
-        db_conn  = float(_get(r, _find_col(df_test, "Db_connection_pool_usage"), 0))
-        resp_ms  = float(_get(r, _find_col(df_test, "Response_time_ms"), 0))
-        db_ms    = float(_get(r, _find_col(df_test, "Db_query_time_ms"), 0))
-        tpm      = float(_get(r, _find_col(df_test, "Transactions_per_minute"), 0))
-        users    = float(_get(r, _find_col(df_test, "Active_users_current"), 0))
-        retry    = float(_get(r, _find_col(df_test, "Retry_count"), 0))
-        err_val  = _get(r, _err_col, _none_encoded)
-        try:
-            err = int(float(err_val))
-        except Exception:
-            err = _none_encoded
-
-        if cpu > 85 or mem > 85:
-            return "Dégradation performance"
-        if thread > 90 or db_conn > 90:
-            return "Mauvaise configuration pool"
-        if resp_ms > 2000 or db_ms > 1000:
-            return "Timeout / lenteur DB"
-        if tpm > 5000 or tpm < 0:
-            return "Pic transaction / incohérence"
-        if users > 5000:
-            return "Comportement utilisateur anormal"
-        if err != _none_encoded:
-            return "Pic d'erreurs applicatives"
-        if retry > 3:
-            return "Rejeux excessifs"
-        return "Comportement anormal"
-
-    rule_labels    = df_anom.apply(classify_app_by_rules, axis=1).values
+    rule_labels    = df_anom.apply(classify_by_rules, axis=1).values
     ambiguous_mask = (rule_labels == "Comportement anormal")
-    n_ambiguous    = ambiguous_mask.sum()
+    n_ambiguous    = int(ambiguous_mask.sum())
     print(f"     Regles : {(~ambiguous_mask).sum()} | KMeans : {n_ambiguous}")
 
     if n_ambiguous >= 4:
-        DISC       = [_find_col(df_test, c) for c in [
-                         "Response_time_ms", "Db_query_time_ms", "Cpu_usage_percent",
-                         "Memory_usage_percent", "Thread_pool_usage_percent",
-                         "Transactions_per_minute", "Active_users_current"]]
+        DISC = ["Response_time_ms", "Db_query_time_ms", "Cpu_usage_percent",
+                "Memory_usage_percent", "Retry_count",
+                "Active_users_current", "Transactions_per_minute"]
         disc_avail = [f for f in DISC if f in df_anom.columns]
-        X_ambig    = df_anom[ambiguous_mask][disc_avail].fillna(0).values.astype(np.float32)
+        X_ambig    = np.nan_to_num(
+            df_anom[ambiguous_mask][disc_avail].fillna(0).values.astype(np.float32))
         sc_d       = StandardScaler()
         X_ambig_sc = sc_d.fit_transform(X_ambig)
-        best_k, best_sil = 2, -1
-        for k in range(2, min(6, len(X_ambig))):
-            lab_t = KMeans(n_clusters=k, random_state=RANDOM_STATE, n_init=10).fit_predict(X_ambig_sc)
-            if len(set(lab_t)) > 1:
-                s = silhouette_score(X_ambig_sc, lab_t)
-                if s > best_sil:
-                    best_sil, best_k = s, k
+        best_k, best_sil = 2, -1.0
+        for k in range(2, min(5, n_ambiguous)):
+            try:
+                lab_t = KMeans(n_clusters=k, random_state=RANDOM_STATE,
+                               n_init=10).fit_predict(X_ambig_sc)
+                if len(set(lab_t)) > 1:
+                    s = silhouette_score(X_ambig_sc, lab_t)
+                    if s > best_sil:
+                        best_sil, best_k = s, k
+            except Exception:
+                pass
         km  = KMeans(n_clusters=best_k, random_state=RANDOM_STATE, n_init=15)
         cl  = km.fit_predict(X_ambig_sc)
-        cen = pd.DataFrame(sc_d.inverse_transform(km.cluster_centers_), columns=disc_avail)
+        cen = pd.DataFrame(
+            sc_d.inverse_transform(km.cluster_centers_), columns=disc_avail)
 
-        _cpu_c  = _find_col(df_test, "Cpu_usage_percent")
-        _mem_c  = _find_col(df_test, "Memory_usage_percent")
-        _thr_c  = _find_col(df_test, "Thread_pool_usage_percent")
-        _rms_c  = _find_col(df_test, "Response_time_ms")
-        _dms_c  = _find_col(df_test, "Db_query_time_ms")
-        _tpm_c  = _find_col(df_test, "Transactions_per_minute")
-        _usr_c  = _find_col(df_test, "Active_users_current")
-
-        def name_app_ambig(c):
+        def name_ambig(c):
             cd = c.to_dict() if hasattr(c, 'to_dict') else c
-            if _get(cd, _cpu_c, 0) > 85 or _get(cd, _mem_c, 0) > 85:
-                return "Dégradation performance"
-            if _get(cd, _thr_c, 0) > 90:
-                return "Mauvaise configuration pool"
-            if _get(cd, _rms_c, 0) > 2000 or _get(cd, _dms_c, 0) > 1000:
-                return "Timeout / lenteur DB"
-            if _get(cd, _tpm_c, 0) > 5000:
-                return "Pic transaction / incohérence"
-            if _get(cd, _usr_c, 0) > 5000:
-                return "Comportement utilisateur anormal"
+            if float(cd.get("Cpu_usage_percent",      0)) > 60:   return "Degradation performance"
+            if float(cd.get("Response_time_ms",       0)) > 250:  return "Temps de reponse anormal"
+            if float(cd.get("Db_query_time_ms",       0)) > 150:  return "Timeout / Lenteur DB"
+            if float(cd.get("Retry_count",            0)) > 5:    return "Rejeux excessifs"
+            if float(cd.get("Active_users_current",   0)) > 4000: return "Pic de charge utilisateur"
             return "Comportement anormal"
 
-        km_map = {i: name_app_ambig(cen.iloc[i]) for i in range(best_k)}
+        km_map = {i: name_ambig(cen.iloc[i]) for i in range(best_k)}
         rule_labels[ambiguous_mask] = np.array([km_map[c] for c in cl])
 
     anomaly_type_array = rule_labels
-    for t, c in pd.Series(anomaly_type_array).value_counts().items():
-        print(f"       {t:<45}: {c:>5}  ({c/len(anomaly_idx)*100:.1f}%)")
+    for t, cnt in pd.Series(anomaly_type_array).value_counts().items():
+        print(f"       {str(t):<45}: {cnt:>5}  ({cnt / len(anomaly_idx) * 100:.1f}%)")
 
+# ── 4.F  SCORE DE RISQUE ─────────────────────────────────────────
+def compute_risk(row):
+    risk    = 0
+    cpu     = float(row.get("Cpu_usage_percent",       0) or 0)
+    mem     = float(row.get("Memory_usage_percent",    0) or 0)
+    resp_ms = float(row.get("Response_time_ms",        0) or 0)
+    db_ms   = float(row.get("Db_query_time_ms",        0) or 0)
+    retry   = float(row.get("Retry_count",             0) or 0)
+    users   = float(row.get("Active_users_current",    0) or 0)
+    tpm     = float(row.get("Transactions_per_minute", 0) or 0)
+    status  = float(row.get("Http_status_code",        200) or 200)
+    err     = str(row.get("error_code",               "NONE") or "NONE")
 
-# ── FIX 6 : compute_app_risk utilise aussi .to_dict() ────────────
-_resp_c = _find_col(df_test, "Response_time_ms")
-_dbms_c = _find_col(df_test, "Db_query_time_ms")
-_thr_c2 = _find_col(df_test, "Thread_pool_usage_percent")
-_dbc_c  = _find_col(df_test, "Db_connection_pool_usage")
-_tpm_c2 = _find_col(df_test, "Transactions_per_minute")
-_cpu_c2 = _find_col(df_test, "Cpu_usage_percent")
-_mem_c2 = _find_col(df_test, "Memory_usage_percent")
-_usr_c2 = _find_col(df_test, "Active_users_current")
-_rtr_c  = _find_col(df_test, "Retry_count")
-
-def compute_app_risk(row):
-    r = row.to_dict() if hasattr(row, 'to_dict') else row
-    risk = 0
-    err_val = _get(r, _err_col, _none_encoded)
-    try:
-        err = int(float(err_val))
-    except Exception:
-        err = _none_encoded
-
-    if err != _none_encoded:                                        risk += 9
-    if float(_get(r, _tpm_c2, 0)) > 5000:                         risk += 8
-    if float(_get(r, _resp_c, 0)) > 2000 or \
-       float(_get(r, _dbms_c, 0)) > 1000:                         risk += 7
-    if float(_get(r, _thr_c2, 0)) > 90 or \
-       float(_get(r, _dbc_c, 0)) > 90:                            risk += 6
-    if float(_get(r, _cpu_c2, 0)) > 90 or \
-       float(_get(r, _mem_c2, 0)) > 90:                           risk += 6
-    if float(_get(r, _usr_c2, 0)) > 10_000:                       risk += 5
-    if float(_get(r, _rtr_c, 0)) > 5:                             risk += 4
+    if err == "AUTH_FAILED"          or status in (401, 403): risk += 9
+    if err == "RATE_LIMIT_EXCEEDED"  or status == 429:        risk += 8
+    if err == "DB_TIMEOUT"           or db_ms > 150:          risk += 8
+    if err == "CONFIG_ERROR":                                  risk += 7
+    if status >= 500 and status != 429:                        risk += 7
+    if cpu > 60 or mem > 60:                                   risk += 6
+    if resp_ms > 250:                                          risk += 5
+    if retry > 5:                                              risk += 4
+    if users > 4000 or tpm > 900:                             risk += 3
     return min(risk, 10)
 
 
@@ -513,32 +515,29 @@ df_result["Anomaly_type"]    = "Normal"
 df_result["Risk"]            = 0
 
 if len(anomaly_idx) > 0:
-    df_result.loc[anomaly_idx, "Anomaly_type"] = anomaly_type_array
-    df_result.loc[anomaly_idx, "Risk"] = (
-        df_result.loc[anomaly_idx].apply(compute_app_risk, axis=1)
-    )
+    anom_col_idx = df_result.columns.get_loc("Anomaly_type")
+    risk_col_idx = df_result.columns.get_loc("Risk")
+    df_result.iloc[anomaly_idx, anom_col_idx] = anomaly_type_array
+    df_result.iloc[anomaly_idx, risk_col_idx] = (
+        df_result.iloc[anomaly_idx].apply(compute_risk, axis=1).values)
 
 anomalies     = df_result[df_result["is_anomaly"] == 1].copy()
 total, n_anom = len(df_result), len(anomalies)
-rate          = n_anom / total * 100
-crit          = (anomalies["Risk"] >= 8).sum()
+rate          = n_anom / total * 100 if total > 0 else 0.0
+crit          = int((anomalies["Risk"] >= 8).sum())
 
-# ── Courbes de convergence ────────────────────────────────────────
 fig, axes = plt.subplots(1, 2, figsize=(13, 4))
 for ax, hist, title, c1, c2 in [
-    (axes[0], ae_hist,   "Autoencoder Dense App", '#7209b7', 'orange'),
-    (axes[1], lstm_hist, "LSTM AE App",           '#480ca8', 'red')
+    (axes[0], ae_hist,   "Autoencoder App", '#7209b7', 'orange'),
+    (axes[1], lstm_hist, "LSTM AE App",     '#480ca8', 'red'),
 ]:
     ax.plot(hist.history['loss'],     label='Train', color=c1, linewidth=2)
     ax.plot(hist.history['val_loss'], label='Val',   color=c2, linewidth=2)
-    ax.set_title(f"{title} — Loss MSE")
-    ax.legend()
-    ax.grid(alpha=0.3)
+    ax.set_title(f"{title} — Loss MSE"); ax.legend(); ax.grid(alpha=0.3)
 plt.tight_layout()
 fig.savefig(PLOT_CONVERGENCE, dpi=100)
 plt.close(fig)
 
-# ── PCA 2D ───────────────────────────────────────────────────────
 if n_anom > 5:
     pca   = PCA(n_components=2, random_state=RANDOM_STATE)
     X_pca = pca.fit_transform(X_test_std)
@@ -548,16 +547,16 @@ if n_anom > 5:
     pal = sns.color_palette("tab10", anomalies["Anomaly_type"].nunique())
     for i, atype in enumerate(anomalies["Anomaly_type"].unique()):
         ix = np.where(
-            (df_result["is_anomaly"] == 1) &
-            (df_result["Anomaly_type"] == atype)
+            (df_result["is_anomaly"].values == 1) &
+            (df_result["Anomaly_type"].values == atype)
         )[0]
-        ax2.scatter(X_pca[ix, 0], X_pca[ix, 1], c=[pal[i]], s=25, alpha=0.85, label=atype)
+        if len(ix) > 0:
+            ax2.scatter(X_pca[ix, 0], X_pca[ix, 1],
+                        c=[pal[i]], s=25, alpha=0.85, label=str(atype))
     ax2.set_title(
         f"PCA 2D App — PC1={pca.explained_variance_ratio_[0]*100:.1f}%"
-        f" | PC2={pca.explained_variance_ratio_[1]*100:.1f}%"
-    )
-    ax2.legend(fontsize=9)
-    plt.tight_layout()
+        f" | PC2={pca.explained_variance_ratio_[1]*100:.1f}%")
+    ax2.legend(fontsize=9); plt.tight_layout()
     fig2.savefig(PLOT_PCA, dpi=100)
     plt.close(fig2)
 
@@ -572,24 +571,23 @@ print("\n" + "=" * 65)
 print("PHASE 6 — DEPLOYMENT & MONITORING")
 print("=" * 65)
 
-_app_col  = _find_col(df_test, "Application_name")
-_srv_col  = _find_col(df_test, "Server_instance")
-_end_col  = _find_col(df_test, "Endpoint")
-_evt_col  = _find_col(df_test, "Event_id")
-_ts_col   = _find_col(df_test, "Timestamp")
-
-id_cols  = [c for c in [_evt_col, _ts_col, _app_col, _srv_col, _end_col] if c in anomalies.columns]
-top_cols = id_cols + ["Anomaly_type", "Risk", "composite_score", "ensemble_votes"]
-top20    = anomalies.sort_values(["Risk", "composite_score"], ascending=False).head(20)
+top_cols = [c for c in ["Event_id", "Timestamp", "Application_name",
+                         "Server_instance", "Endpoint"]
+            if c in anomalies.columns]
+top_cols += ["Anomaly_type", "Risk", "composite_score", "ensemble_votes"]
+top20 = anomalies.sort_values(["Risk", "composite_score"], ascending=False).head(20)
 print("\n  TOP 20 ANOMALIES APPLICATIFS :")
-print(top20[[c for c in top_cols if c in top20.columns]].to_string(index=False))
+if len(top20) > 0:
+    print(top20[[c for c in top_cols if c in top20.columns]].to_string(index=False))
+else:
+    print("  (aucune anomalie detectee)")
 
 
 # ================================================================
-# EXPORT CSV  →  App_info/
+# EXPORT CSV  ->  App_info/
 # ================================================================
 print("\n" + "=" * 65)
-print("EXPORT DES RESULTATS — CSV  →  App_info/")
+print("EXPORT DES RESULTATS — CSV  ->  App_info/")
 print("=" * 65)
 
 exp_cols = (list(df_test.columns)
@@ -601,12 +599,32 @@ exp_cols = [c for c in exp_cols if c in df_result.columns]
 df_result[exp_cols].to_csv(OUTPUT_PATH, index=False, encoding="utf-8-sig")
 
 anom_path = os.path.join(OUTPUT_DIR, "Detected_App_Anomalies_anomalies_only.csv")
-anomalies[exp_cols].sort_values(
-    ["Risk", "composite_score"], ascending=False
-).to_csv(anom_path, index=False, encoding="utf-8-sig")
+if n_anom > 0:
+    (anomalies[[c for c in exp_cols if c in anomalies.columns]]
+     .sort_values(["Risk", "composite_score"], ascending=False)
+     .to_csv(anom_path, index=False, encoding="utf-8-sig"))
+else:
+    pd.DataFrame(columns=exp_cols).to_csv(anom_path, index=False, encoding="utf-8-sig")
 
 print(f"  OK {OUTPUT_PATH}")
 print(f"  OK {anom_path}")
+
+
+# ================================================================
+# EXPORT INCREMENTAL DATA_ANALYST
+# ================================================================
+run_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+_eid_c = next((c for c in ["Event_id","event_id"] if c in df_result.columns), None)
+
+print("\n" + "=" * 65)
+print("EXPORT INCREMENTAL — Data_Analyst/")
+print("=" * 65)
+incremental_save_to_data_analyst(
+    df_result[exp_cols],
+    DA_OUTPUT_PATH,
+    id_col=_eid_c,
+    run_ts=run_timestamp
+)
 
 
 # ================================================================
@@ -622,7 +640,6 @@ def _to_native(v):
     if isinstance(v, (np.bool_,)):    return bool(v)
     return v
 
-
 def save_app_anomalies_to_mongo(df: pd.DataFrame, run_ts: str) -> None:
     print(f"  URI        : {MONGO_URI}")
     print(f"  Base       : {MONGO_DB}  |  Collection : {MONGO_COL}")
@@ -631,24 +648,17 @@ def save_app_anomalies_to_mongo(df: pd.DataFrame, run_ts: str) -> None:
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5_000)
         client.server_info()
         col = client[MONGO_DB][MONGO_COL]
-
         df_clean = df.copy()
         df_clean.replace([float("inf"), float("-inf")], None, inplace=True)
         df_clean = df_clean.where(df_clean.notna(), other=None)
         df_clean["pipeline_run_at"] = run_ts
-
         docs = [{k: _to_native(v) for k, v in row.items()}
                 for row in df_clean.to_dict(orient="records")]
-
-        # Chercher Event_id ou event_id
-        _eid = _find_col(df, "Event_id")
-        has_event_id = _eid in df.columns
-
+        has_event_id = "Event_id" in df.columns
         if has_event_id:
-            operations = [
-                UpdateOne({_eid: doc[_eid]}, {"$set": doc}, upsert=True)
-                for doc in docs
-            ]
+            operations = [UpdateOne({"Event_id": doc["Event_id"]},
+                                    {"$set": doc}, upsert=True)
+                          for doc in docs]
             res = col.bulk_write(operations, ordered=False)
             print(f"  OK upsert  : {res.upserted_count} inseres | {res.modified_count} mis a jour")
         else:
@@ -657,23 +667,16 @@ def save_app_anomalies_to_mongo(df: pd.DataFrame, run_ts: str) -> None:
                 print(f"  Anciens docs supprimes : {deleted}")
             res = col.insert_many(docs, ordered=False)
             print(f"  OK insert  : {len(res.inserted_ids):,} documents inseres")
-
-        col.create_index("is_anomaly")
-        col.create_index("Anomaly_type")
-        col.create_index("Risk")
-        col.create_index("pipeline_run_at")
+        col.create_index("is_anomaly"); col.create_index("Anomaly_type")
+        col.create_index("Risk");       col.create_index("pipeline_run_at")
         if has_event_id:
-            col.create_index(_eid, unique=True, sparse=True)
-
+            col.create_index("Event_id", unique=True, sparse=True)
         client.close()
         print("  OK index crees / verifies")
-
     except Exception as exc:
         print(f"  ERREUR MongoDB : {exc}")
         print("  Le pipeline continue — les CSV ont bien ete sauvegardes.")
 
-
-run_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 save_app_anomalies_to_mongo(df_result[exp_cols], run_timestamp)
 
 
@@ -683,5 +686,6 @@ save_app_anomalies_to_mongo(df_result[exp_cols], run_timestamp)
 print("\n" + "=" * 65)
 print(f"  TERMINE — Anomalies : {n_anom:,} ({rate:.1f}%) | Critiques : {crit}")
 print(f"  Run timestamp       : {run_timestamp}")
-print(f"  Fichiers dans       : {OUTPUT_DIR}")
+print(f"  Fichiers locaux     : {OUTPUT_DIR}")
+print(f"  Data_Analyst        : {DA_OUTPUT_PATH}")
 print("=" * 65)

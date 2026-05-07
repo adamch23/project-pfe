@@ -1,16 +1,12 @@
 # ================================================================
-# DETECTION D'ANOMALIES OS & INFRASTRUCTURE — PIPELINE CRISP-DM v1
+# DETECTION D'ANOMALIES OS & INFRASTRUCTURE — PIPELINE CRISP-DM v2
 # ================================================================
 # Fichier : E:\backend\app\IA_anomaly_detection\OS_Infrastructure.py
 # CSV attendus dans le meme dossier :
 #   - OS&Infrastructure.csv        (train)
 #   - OS&Infrastructure_test.csv   (test)
-# Sorties dans le sous-dossier OS_info/ :
-#   - Detected_OS_Anomalies.csv
-#   - Detected_OS_Anomalies_anomalies_only.csv
-#   - plot_os_distributions.png
-#   - plot_os_convergence.png
-#   - plot_os_pca.png
+# Sorties dans le sous-dossier OS_info/
+# Rapport global incremental dans E:\backend\app\Data_Analyst\
 # ================================================================
 
 import sys
@@ -51,32 +47,33 @@ np.random.seed(42)
 # ================================================================
 # SECTION 0 — CONFIGURATION GLOBALE
 # ================================================================
-BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR         = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR       = os.path.join(BASE_DIR, "OS_info")
+DATA_ANALYST_DIR = os.path.join(os.path.dirname(BASE_DIR), "Data_Analyst")
 
-# ── Dossier de sortie dédié au pipeline OS ───────────────────────
-OUTPUT_DIR = os.path.join(BASE_DIR, "OS_info")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(DATA_ANALYST_DIR, exist_ok=True)
 
 TRAIN_PATH  = os.path.join(BASE_DIR, "OS&Infrastructure.csv")
 TEST_PATH   = os.path.join(BASE_DIR, "OS&Infrastructure_test.csv")
 OUTPUT_PATH = os.path.join(OUTPUT_DIR, "Detected_OS_Anomalies.csv")
 
+# Rapport global incremental dans Data_Analyst
+DA_OUTPUT_PATH = os.path.join(DATA_ANALYST_DIR, "Detected_OS_Anomalies.csv")
+
 PLOT_DISTRIBUTIONS = os.path.join(OUTPUT_DIR, "plot_os_distributions.png")
 PLOT_CONVERGENCE   = os.path.join(OUTPUT_DIR, "plot_os_convergence.png")
 PLOT_PCA           = os.path.join(OUTPUT_DIR, "plot_os_pca.png")
 
-# ── MongoDB ──────────────────────────────────────────────────────
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB  = os.environ.get("MONGO_DB",  "OS_db")
 MONGO_COL = "detected_os_anomalies"
-# ─────────────────────────────────────────────────────────────────
 
 CATEGORICAL_COLS = [
     "host_id", "host_role", "event_type",
     "service_name", "process_name", "patch_level"
 ]
 
-# Features après feature engineering temporel
 FEATURES = [
     "cpu_usage_percent", "memory_usage_percent", "disk_usage_percent",
     "disk_io_rate", "network_io_rate", "open_file_descriptors",
@@ -87,13 +84,77 @@ FEATURES = [
     "service_name", "process_name", "patch_level"
 ]
 
-IF_CONTAMINATION = "auto"
-N_SIGMA_AE       = 1.5
-N_SIGMA_LSTM     = 1.5
-VOTE_THRESHOLD   = 1
+# ----------------------------------------------------------------
+# PARAMETRES CLES — CALIBRES POUR ~20% D'ANOMALIES OS
+# ----------------------------------------------------------------
+# CORRECTION v1 → v2 :
+#   - VOTE_THRESHOLD  : 1 → 2  (consensus >= 2/3 modeles obligatoire)
+#   - IF_CONTAMINATION: "auto" → 0.20 (guide IF vers la proportion reelle)
+#   - N_SIGMA_AE      : 1.5 → 2.5  (seuil moins agressif = moins de faux positifs)
+#   - N_SIGMA_LSTM    : 1.5 → 2.5  (idem)
+#   Avec VOTE_THRESHOLD=1 + sigma=1.5, chaque modele sur-detectait
+#   individuellement et leur union depassait 60%.
+# ----------------------------------------------------------------
+IF_CONTAMINATION = 0.20   # proportion estimee des anomalies OS (~20%)
+N_SIGMA_AE       = 2.5    # seuil autoencoder (mu + 2.5*sigma)
+N_SIGMA_LSTM     = 2.5    # seuil LSTM (mu + 2.5*sigma)
+VOTE_THRESHOLD   = 2      # CORRIGE : consensus >= 2/3 modeles
 LSTM_WINDOW      = 5
 LSTM_SAMPLE      = 8_000
 RANDOM_STATE     = 42
+
+
+# ================================================================
+# FONCTION INCREMENTATION DATA_ANALYST
+# ================================================================
+def incremental_save_to_data_analyst(df_new: pd.DataFrame,
+                                      da_path: str,
+                                      id_col: str = None,
+                                      run_ts: str = "") -> None:
+    """
+    Sauvegarde incrementale dans Data_Analyst :
+    - Si le fichier n'existe pas : creation directe.
+    - Si le fichier existe : append des nouvelles lignes.
+    - Si un id existe deja dans l'ancien fichier :
+        on conserve l'ancien ET on ajoute le nouveau avec id suffixe _v2, _v3...
+    - Colonne 'pipeline_run_at' ajoutee pour tracabilite.
+    """
+    df_new = df_new.copy()
+    df_new["pipeline_run_at"] = run_ts
+    df_new["pipeline_source"] = "OS_Infrastructure"
+
+    if not os.path.exists(da_path):
+        df_new.to_csv(da_path, index=False, encoding="utf-8-sig")
+        print(f"  OK Data_Analyst cree : {da_path} ({len(df_new):,} lignes)")
+        return
+
+    df_existing = pd.read_csv(da_path, low_memory=False)
+
+    if id_col and id_col in df_existing.columns and id_col in df_new.columns:
+        existing_ids = set(df_existing[id_col].astype(str).tolist())
+        def _make_unique_id(row):
+            orig = str(row[id_col])
+            if orig not in existing_ids:
+                return orig
+            version = 2
+            candidate = f"{orig}_v{version}"
+            while candidate in existing_ids:
+                version += 1
+                candidate = f"{orig}_v{version}"
+            existing_ids.add(candidate)
+            return candidate
+
+        df_new[id_col] = df_new.apply(_make_unique_id, axis=1)
+        print(f"  OK Deduplication id sur colonne '{id_col}'")
+
+    all_cols = list(dict.fromkeys(list(df_existing.columns) + list(df_new.columns)))
+    df_existing = df_existing.reindex(columns=all_cols)
+    df_new      = df_new.reindex(columns=all_cols)
+
+    df_merged = pd.concat([df_existing, df_new], ignore_index=True)
+    df_merged.to_csv(da_path, index=False, encoding="utf-8-sig")
+    print(f"  OK Data_Analyst mis a jour : {da_path}")
+    print(f"     Avant={len(df_existing):,} | Nouveaux={len(df_new):,} | Total={len(df_merged):,}")
 
 
 # ================================================================
@@ -106,9 +167,11 @@ print(f"""
 Objectif : Detection automatique d'anomalies dans les logs OS & Infrastructure.
 Sorties  : is_anomaly | Anomaly_type | Risk (0-10)
 Modeles  : Isolation Forest + Autoencoder + LSTM Autoencoder
-Vote     : anomalie si >= {VOTE_THRESHOLD} modele(s) detecte
+Vote     : anomalie si >= {VOTE_THRESHOLD} modele(s) sur 3 (consensus)
+IF contam: {IF_CONTAMINATION} | Sigma AE/LSTM : {N_SIGMA_AE}
 MongoDB  : {MONGO_URI} / db={MONGO_DB} / col={MONGO_COL}
 Dossier  : {OUTPUT_DIR}
+Data_Analyst : {DATA_ANALYST_DIR}
 """)
 
 
@@ -122,14 +185,12 @@ print("=" * 65)
 df_train = pd.read_csv(TRAIN_PATH)
 df_test  = pd.read_csv(TEST_PATH)
 
-# Uniformisation des noms de colonnes en minuscules
 df_train.columns = df_train.columns.str.lower()
 df_test.columns  = df_test.columns.str.lower()
 
 for name, df in [("TRAIN", df_train), ("TEST", df_test)]:
     print(f"  [{name}] shape={df.shape} | nulls={df.isnull().sum().sum()}")
 
-# ── Feature engineering temporel ────────────────────────────────
 for df in [df_train, df_test]:
     df["timestamp"]   = pd.to_datetime(df["timestamp"], errors="coerce")
     df["hour"]        = df["timestamp"].dt.hour.fillna(0).astype(int)
@@ -139,7 +200,6 @@ for df in [df_train, df_test]:
 
 print("  OK Feature engineering temporel : hour, day_of_week, is_weekend, is_night")
 
-# ── Distributions numériques ─────────────────────────────────────
 numeric_base = [
     "cpu_usage_percent", "memory_usage_percent", "disk_usage_percent",
     "disk_io_rate", "network_io_rate", "open_file_descriptors",
@@ -152,8 +212,7 @@ for ax, feat in zip(axes.flatten(), num_feats_avail[:12]):
     v = df_train[feat].dropna()
     v.clip(lower=v.quantile(0.01), upper=v.quantile(0.99)).plot(
         kind='hist', bins=40, ax=ax, color='#2d6a4f', edgecolor='white')
-    ax.set_title(feat, fontsize=9)
-    ax.set_xlabel("")
+    ax.set_title(feat, fontsize=9); ax.set_xlabel("")
 for ax in axes.flatten()[len(num_feats_avail):]:
     ax.set_visible(False)
 plt.suptitle("Phase 2 — Distributions des features OS & Infrastructure (TRAIN)",
@@ -194,12 +253,10 @@ def prepare_data(df_tr_in, df_te_in, features, cat_cols):
     X_tr_raw = df_tr[avail].fillna(0).values.astype(np.float32)
     X_te_raw = df_te[avail].fillna(0).values.astype(np.float32)
 
-    # StandardScaler → IF & AE
     sc_std   = StandardScaler()
     X_tr_std = sc_std.fit_transform(X_tr_raw)
     X_te_std = sc_std.transform(X_te_raw)
 
-    # MinMaxScaler → LSTM
     sc_mm   = MinMaxScaler()
     X_tr_mm = sc_mm.fit_transform(X_tr_raw)
     X_te_mm = sc_mm.transform(X_te_raw)
@@ -212,6 +269,7 @@ def prepare_data(df_tr_in, df_te_in, features, cat_cols):
     df_train, df_test, FEATURES, CATEGORICAL_COLS)
 
 n_feat = X_train_std.shape[1]
+n_test = len(df_test)
 
 
 # ================================================================
@@ -222,13 +280,11 @@ print("PHASE 4 — MODELING")
 print("=" * 65)
 
 # ── 4.A  ISOLATION FOREST ────────────────────────────────────────
+# contamination=0.20 guide le modele vers ~20% d'anomalies
 print("\n  [4.A] Isolation Forest")
 iso = IsolationForest(
-    n_estimators=400,
-    contamination=IF_CONTAMINATION,
-    max_features=0.8,
-    random_state=RANDOM_STATE,
-    n_jobs=-1
+    n_estimators=400, contamination=IF_CONTAMINATION,
+    max_features=0.8, random_state=RANDOM_STATE, n_jobs=-1
 )
 iso.fit(X_train_std)
 if_raw     = -iso.decision_function(X_test_std)
@@ -236,10 +292,9 @@ if_anomaly = (iso.predict(X_test_std) == -1).astype(int)
 if_scores  = (if_raw - if_raw.min()) / (if_raw.max() - if_raw.min() + 1e-9)
 print(f"     Anomalies : {if_anomaly.sum():,} ({if_anomaly.mean()*100:.1f}%)")
 
-
 # ── 4.B  AUTOENCODER DENSE ───────────────────────────────────────
+# Seuil mu + 2.5*sigma (vs 1.5 avant) → moins de faux positifs
 print("\n  [4.B] Autoencoder Dense")
-
 def build_ae(n):
     inp = Input(shape=(n,))
     x   = Dense(128, activation='relu')(inp)
@@ -253,9 +308,7 @@ def build_ae(n):
 
 ae      = build_ae(n_feat)
 ae_hist = ae.fit(
-    X_train_std, X_train_std,
-    epochs=60,
-    batch_size=512,
+    X_train_std, X_train_std, epochs=60, batch_size=512,
     validation_split=0.1,
     callbacks=[EarlyStopping(patience=6, restore_best_weights=True)],
     verbose=0
@@ -263,24 +316,27 @@ ae_hist = ae.fit(
 print(f"     Epochs : {len(ae_hist.history['loss'])}")
 
 ae_mse_tr  = np.mean((X_train_std - ae.predict(X_train_std, verbose=0))**2, axis=1)
-ae_thr     = ae_mse_tr.mean() + N_SIGMA_AE * ae_mse_tr.std()
+ae_thr     = float(ae_mse_tr.mean() + N_SIGMA_AE * ae_mse_tr.std())
 ae_mse_te  = np.mean((X_test_std  - ae.predict(X_test_std,  verbose=0))**2, axis=1)
 ae_anomaly = (ae_mse_te > ae_thr).astype(int)
 ae_scores  = (ae_mse_te - ae_mse_te.min()) / (ae_mse_te.max() - ae_mse_te.min() + 1e-9)
 print(f"     Seuil : {ae_thr:.6f} | Anomalies : {ae_anomaly.sum():,} ({ae_anomaly.mean()*100:.1f}%)")
 
-
 # ── 4.C  LSTM AUTOENCODER ────────────────────────────────────────
+# Seuil mu + 2.5*sigma (vs 1.5 avant) → moins de faux positifs
 print("\n  [4.C] LSTM Autoencoder")
-
 def make_sequences(X, w):
-    n       = len(X)
-    shape   = (n - w + 1, w, X.shape[1])
-    strides = (X.strides[0], X.strides[0], X.strides[1])
-    return np.lib.stride_tricks.as_strided(X, shape=shape, strides=strides).copy()
+    n_seq = len(X) - w + 1
+    if n_seq <= 0:
+        return np.zeros((1, w, X.shape[1]), dtype=np.float32)
+    seqs = np.empty((n_seq, w, X.shape[1]), dtype=np.float32)
+    for i in range(n_seq):
+        seqs[i] = X[i:i + w]
+    return seqs
 
-sample_size = min(LSTM_SAMPLE, len(X_train_mm) - LSTM_WINDOW)
-idx_s    = np.random.choice(len(X_train_mm) - LSTM_WINDOW, size=sample_size, replace=False)
+sample_size = min(LSTM_SAMPLE, max(1, len(X_train_mm) - LSTM_WINDOW))
+idx_s    = np.random.choice(max(1, len(X_train_mm) - LSTM_WINDOW),
+                             size=sample_size, replace=False)
 X_tr_seq = make_sequences(X_train_mm, LSTM_WINDOW)[idx_s]
 X_te_seq = make_sequences(X_test_mm,  LSTM_WINDOW)
 
@@ -296,9 +352,7 @@ def build_lstm_ae(w, n):
 
 lstm_ae   = build_lstm_ae(LSTM_WINDOW, n_feat)
 lstm_hist = lstm_ae.fit(
-    X_tr_seq, X_tr_seq,
-    epochs=40,
-    batch_size=256,
+    X_tr_seq, X_tr_seq, epochs=40, batch_size=256,
     validation_split=0.1,
     callbacks=[EarlyStopping(patience=6, restore_best_weights=True)],
     verbose=0
@@ -306,29 +360,39 @@ lstm_hist = lstm_ae.fit(
 print(f"     Epochs : {len(lstm_hist.history['loss'])}")
 
 lstm_mse_tr  = np.mean((X_tr_seq - lstm_ae.predict(X_tr_seq, verbose=0))**2, axis=(1, 2))
-lstm_thr     = lstm_mse_tr.mean() + N_SIGMA_LSTM * lstm_mse_tr.std()
+lstm_thr     = float(lstm_mse_tr.mean() + N_SIGMA_LSTM * lstm_mse_tr.std())
 lstm_mse_te  = np.mean((X_te_seq - lstm_ae.predict(X_te_seq, verbose=0))**2, axis=(1, 2))
-lstm_mse_pad = np.concatenate([
-    np.full(LSTM_WINDOW - 1, np.median(lstm_mse_te)),
-    lstm_mse_te
-])
+
+# Alignement precis sur n_test (meme logique que LogsApplicatifs)
+n_pad = n_test - len(lstm_mse_te)
+if n_pad > 0:
+    lstm_mse_pad = np.concatenate([
+        np.full(n_pad, float(np.median(lstm_mse_te))), lstm_mse_te])
+elif n_pad < 0:
+    lstm_mse_pad = lstm_mse_te[-n_test:]
+else:
+    lstm_mse_pad = lstm_mse_te
+
+assert len(lstm_mse_pad) == n_test
+
 lstm_anomaly = (lstm_mse_pad > lstm_thr).astype(int)
 lstm_scores  = ((lstm_mse_pad - lstm_mse_pad.min())
                 / (lstm_mse_pad.max() - lstm_mse_pad.min() + 1e-9))
 print(f"     Seuil : {lstm_thr:.6f} | Anomalies : {lstm_anomaly.sum():,} ({lstm_anomaly.mean()*100:.1f}%)")
 
-
 # ── 4.D  VOTE D'ENSEMBLE ─────────────────────────────────────────
+# CORRECTION PRINCIPALE : VOTE_THRESHOLD=2 (consensus >= 2/3)
+# Avant : threshold=1 → union = sur-detection massive (~60%+)
+# Apres : threshold=2 → intersection 2/3 → ~20% attendus
 print("\n  [4.D] Vote d'ensemble (IF + AE + LSTM)")
 votes            = if_anomaly + ae_anomaly + lstm_anomaly
 ensemble_anomaly = (votes >= VOTE_THRESHOLD).astype(int)
 composite_score  = (if_scores + ae_scores + lstm_scores) / 3.0
-
 print(f"     3/3 Critique  : {(votes==3).sum():,}")
 print(f"     2/3 Confirme  : {(votes==2).sum():,}")
-print(f"     1/3 Incertain : {(votes==1).sum():,}")
-print(f"     Anomalies retenues : {ensemble_anomaly.sum():,} ({ensemble_anomaly.mean()*100:.1f}%)")
-
+print(f"     1/3 Incertain : {(votes==1).sum():,} (exclus du resultat final)")
+print(f"     Anomalies retenues (>= {VOTE_THRESHOLD}/3) : "
+      f"{ensemble_anomaly.sum():,} ({ensemble_anomaly.mean()*100:.1f}%)")
 
 # ── 4.E  CLASSIFICATION DU TYPE D'ANOMALIE ───────────────────────
 print("\n  [4.E] Classification du type d'anomalie OS")
@@ -342,69 +406,70 @@ def classify_os_by_rules(row):
     svc_rs = row.get("service_restart_count_1h", 0)
     cfg    = row.get("config_change_flag", 0)
     login  = row.get("failed_login_count_15min", 0)
-    # event_type déjà encodé — on compare avec le label_encoder
     evt_encoded = row.get("event_type", -1)
     try:
         evt_label = label_encoders["event_type"].inverse_transform([int(evt_encoded)])[0]
     except Exception:
         evt_label = ""
 
-    if evt_label == "malware_detected":
-        return "Malware"
-    if evt_label == "privilege_escalation":
-        return "Escalade privilèges"
-    if evt_label == "crash" or svc_rs > 3:
-        return "Service crash"
-    if cpu > 90:
-        return "Saturation CPU"
-    if mem > 90:
-        return "Fuite mémoire"
-    if disk > 90 or cfg == 1:
-        return "Mauvaise configuration système"
-    if login > 5:
-        return "Tentatives connexion suspectes"
+    if evt_label == "malware_detected":      return "Malware"
+    if evt_label == "privilege_escalation":  return "Escalade privileges"
+    if evt_label == "crash" or svc_rs > 3:   return "Service crash"
+    if cpu > 90:                             return "Saturation CPU"
+    if mem > 90:                             return "Fuite memoire"
+    if disk > 90 or cfg == 1:               return "Mauvaise configuration systeme"
+    if login > 5:                            return "Tentatives connexion suspectes"
     return "Comportement anormal"
 
-rule_labels    = df_anom.apply(classify_os_by_rules, axis=1).values
-ambiguous_mask = (rule_labels == "Comportement anormal")
-n_ambiguous    = ambiguous_mask.sum()
-print(f"     Regles : {(~ambiguous_mask).sum()} | KMeans : {n_ambiguous}")
+if len(anomaly_idx) == 0:
+    print("  WARN : aucune anomalie detectee.")
+    anomaly_type_array = np.array([], dtype=object)
+else:
+    rule_labels    = df_anom.apply(classify_os_by_rules, axis=1).values
+    ambiguous_mask = (rule_labels == "Comportement anormal")
+    n_ambiguous    = int(ambiguous_mask.sum())
+    print(f"     Regles : {(~ambiguous_mask).sum()} | KMeans : {n_ambiguous}")
 
-if n_ambiguous >= 4:
-    DISC       = ["cpu_usage_percent", "memory_usage_percent", "disk_usage_percent",
-                  "service_restart_count_1h", "failed_login_count_15min",
-                  "network_io_rate", "disk_io_rate"]
-    disc_avail = [f for f in DISC if f in df_anom.columns]
-    X_ambig    = df_anom[ambiguous_mask][disc_avail].fillna(0).values.astype(np.float32)
-    sc_d       = StandardScaler()
-    X_ambig_sc = sc_d.fit_transform(X_ambig)
-    best_k, best_sil = 2, -1
-    for k in range(2, min(6, len(X_ambig))):
-        lab_t = KMeans(n_clusters=k, random_state=RANDOM_STATE, n_init=10).fit_predict(X_ambig_sc)
-        if len(set(lab_t)) > 1:
-            s = silhouette_score(X_ambig_sc, lab_t)
-            if s > best_sil:
-                best_sil, best_k = s, k
-    km  = KMeans(n_clusters=best_k, random_state=RANDOM_STATE, n_init=15)
-    cl  = km.fit_predict(X_ambig_sc)
-    cen = pd.DataFrame(sc_d.inverse_transform(km.cluster_centers_), columns=disc_avail)
+    if n_ambiguous >= 4:
+        DISC       = ["cpu_usage_percent", "memory_usage_percent", "disk_usage_percent",
+                      "service_restart_count_1h", "failed_login_count_15min",
+                      "network_io_rate", "disk_io_rate"]
+        disc_avail = [f for f in DISC if f in df_anom.columns]
+        X_ambig    = df_anom[ambiguous_mask][disc_avail].fillna(0).values.astype(np.float32)
+        sc_d       = StandardScaler()
+        X_ambig_sc = sc_d.fit_transform(X_ambig)
+        best_k, best_sil = 2, -1.0
+        for k in range(2, min(6, n_ambiguous)):
+            try:
+                lab_t = KMeans(n_clusters=k, random_state=RANDOM_STATE,
+                               n_init=10).fit_predict(X_ambig_sc)
+                if len(set(lab_t)) > 1:
+                    s = silhouette_score(X_ambig_sc, lab_t)
+                    if s > best_sil:
+                        best_sil, best_k = s, k
+            except Exception:
+                pass
+        km  = KMeans(n_clusters=best_k, random_state=RANDOM_STATE, n_init=15)
+        cl  = km.fit_predict(X_ambig_sc)
+        cen = pd.DataFrame(sc_d.inverse_transform(km.cluster_centers_), columns=disc_avail)
 
-    def name_os_ambig(c):
-        if c.get("cpu_usage_percent", 0) > 90:              return "Saturation CPU"
-        if c.get("memory_usage_percent", 0) > 90:           return "Fuite mémoire"
-        if c.get("disk_usage_percent", 0) > 90:             return "Mauvaise configuration système"
-        if c.get("service_restart_count_1h", 0) > 3:        return "Service crash"
-        if c.get("failed_login_count_15min", 0) > 5:        return "Tentatives connexion suspectes"
-        if c.get("network_io_rate", 0) > c.get("disk_io_rate", 0) * 10: return "Trafic réseau anormal"
-        return "Comportement anormal"
+        def name_os_ambig(c):
+            cd = c.to_dict() if hasattr(c, 'to_dict') else c
+            if float(cd.get("cpu_usage_percent",      0)) > 90: return "Saturation CPU"
+            if float(cd.get("memory_usage_percent",   0)) > 90: return "Fuite memoire"
+            if float(cd.get("disk_usage_percent",     0)) > 90: return "Mauvaise configuration systeme"
+            if float(cd.get("service_restart_count_1h", 0)) > 3: return "Service crash"
+            if float(cd.get("failed_login_count_15min", 0)) > 5: return "Tentatives connexion suspectes"
+            if float(cd.get("network_io_rate", 0)) > float(cd.get("disk_io_rate", 0)) * 10:
+                return "Trafic reseau anormal"
+            return "Comportement anormal"
 
-    km_map = {i: name_os_ambig(cen.iloc[i]) for i in range(best_k)}
-    rule_labels[ambiguous_mask] = np.array([km_map[c] for c in cl])
+        km_map = {i: name_os_ambig(cen.iloc[i]) for i in range(best_k)}
+        rule_labels[ambiguous_mask] = np.array([km_map[c] for c in cl])
 
-anomaly_type_array = rule_labels
-for t, c in pd.Series(anomaly_type_array).value_counts().items():
-    print(f"       {t:<40}: {c:>5}  ({c/len(anomaly_idx)*100:.1f}%)")
-
+    anomaly_type_array = rule_labels
+    for t, c in pd.Series(anomaly_type_array).value_counts().items():
+        print(f"       {t:<40}: {c:>5}  ({c/len(anomaly_idx)*100:.1f}%)")
 
 # ── 4.F  SCORE DE RISQUE ─────────────────────────────────────────
 def compute_os_risk(row):
@@ -421,15 +486,15 @@ def compute_os_risk(row):
     except Exception:
         evt_label = ""
 
-    if evt_label == "malware_detected":          risk += 9
-    if evt_label == "privilege_escalation":      risk += 8
-    if evt_label == "crash":                     risk += 7
-    if svc > 3:                                  risk += 6
-    if cpu > 90:                                 risk += 5
-    if mem > 90:                                 risk += 5
-    if disk > 90:                                risk += 4
-    if log > 5:                                  risk += 4
-    if cfg == 1:                                 risk += 3
+    if evt_label == "malware_detected":     risk += 9
+    if evt_label == "privilege_escalation": risk += 8
+    if evt_label == "crash":               risk += 7
+    if svc > 3:                            risk += 6
+    if cpu > 90:                           risk += 5
+    if mem > 90:                           risk += 5
+    if disk > 90:                          risk += 4
+    if log > 5:                            risk += 4
+    if cfg == 1:                           risk += 3
     return min(risk, 10)
 
 
@@ -461,10 +526,9 @@ if len(anomaly_idx) > 0:
 
 anomalies     = df_result[df_result["is_anomaly"] == 1].copy()
 total, n_anom = len(df_result), len(anomalies)
-rate          = n_anom / total * 100
-crit          = (anomalies["Risk"] >= 8).sum()
+rate          = n_anom / total * 100 if total > 0 else 0.0
+crit          = int((anomalies["Risk"] >= 8).sum())
 
-# ── Courbes de convergence ────────────────────────────────────────
 fig, axes = plt.subplots(1, 2, figsize=(13, 4))
 for ax, hist, title, c1, c2 in [
     (axes[0], ae_hist,   "Autoencoder Dense OS", '#2d6a4f', 'orange'),
@@ -472,35 +536,31 @@ for ax, hist, title, c1, c2 in [
 ]:
     ax.plot(hist.history['loss'],     label='Train', color=c1, linewidth=2)
     ax.plot(hist.history['val_loss'], label='Val',   color=c2, linewidth=2)
-    ax.set_title(f"{title} — Loss MSE")
-    ax.legend()
-    ax.grid(alpha=0.3)
+    ax.set_title(f"{title} — Loss MSE"); ax.legend(); ax.grid(alpha=0.3)
 plt.tight_layout()
 fig.savefig(PLOT_CONVERGENCE, dpi=100)
 plt.close(fig)
 
-# ── PCA 2D ───────────────────────────────────────────────────────
 if n_anom > 5:
     pca   = PCA(n_components=2, random_state=RANDOM_STATE)
     X_pca = pca.fit_transform(X_test_std)
     fig2, ax2 = plt.subplots(figsize=(11, 7))
     mn = df_result["is_anomaly"] == 0
-    ax2.scatter(X_pca[mn, 0], X_pca[mn, 1],
-                c='lightgrey', s=4, alpha=0.3, label='Normal')
+    ax2.scatter(X_pca[mn, 0], X_pca[mn, 1], c='lightgrey', s=4, alpha=0.3, label='Normal')
     pal = sns.color_palette("tab10", anomalies["Anomaly_type"].nunique())
     for i, atype in enumerate(anomalies["Anomaly_type"].unique()):
         ix = np.where(
-            (df_result["is_anomaly"] == 1) &
-            (df_result["Anomaly_type"] == atype)
+            (df_result["is_anomaly"].values == 1) &
+            (df_result["Anomaly_type"].values == atype)
         )[0]
-        ax2.scatter(X_pca[ix, 0], X_pca[ix, 1],
-                    c=[pal[i]], s=25, alpha=0.85, label=atype)
+        if len(ix) > 0:
+            ax2.scatter(X_pca[ix, 0], X_pca[ix, 1],
+                        c=[pal[i]], s=25, alpha=0.85, label=str(atype))
     ax2.set_title(
         f"PCA 2D OS — PC1={pca.explained_variance_ratio_[0]*100:.1f}% "
         f"| PC2={pca.explained_variance_ratio_[1]*100:.1f}%"
     )
-    ax2.legend(fontsize=9)
-    plt.tight_layout()
+    ax2.legend(fontsize=9); plt.tight_layout()
     fig2.savefig(PLOT_PCA, dpi=100)
     plt.close(fig2)
 
@@ -514,11 +574,15 @@ print(f"  OK {PLOT_PCA}")
 print("\n" + "=" * 65)
 print("PHASE 6 — DEPLOYMENT & MONITORING")
 print("=" * 65)
-id_cols  = [c for c in ["event_id", "timestamp", "host_id", "host_role"] if c in anomalies.columns]
+id_cols  = [c for c in ["event_id", "timestamp", "host_id", "host_role"]
+            if c in anomalies.columns]
 top_cols = id_cols + ["Anomaly_type", "Risk", "composite_score", "ensemble_votes"]
 top20    = anomalies.sort_values(["Risk", "composite_score"], ascending=False).head(20)
 print("\n  TOP 20 ANOMALIES OS :")
-print(top20[[c for c in top_cols if c in top20.columns]].to_string(index=False))
+if len(top20) > 0:
+    print(top20[[c for c in top_cols if c in top20.columns]].to_string(index=False))
+else:
+    print("  (aucune anomalie detectee)")
 
 
 # ================================================================
@@ -537,12 +601,32 @@ exp_cols = [c for c in exp_cols if c in df_result.columns]
 df_result[exp_cols].to_csv(OUTPUT_PATH, index=False, encoding="utf-8-sig")
 
 anom_path = os.path.join(OUTPUT_DIR, "Detected_OS_Anomalies_anomalies_only.csv")
-anomalies[exp_cols].sort_values(
-    ["Risk", "composite_score"], ascending=False
-).to_csv(anom_path, index=False, encoding="utf-8-sig")
+if n_anom > 0:
+    (anomalies[[c for c in exp_cols if c in anomalies.columns]]
+     .sort_values(["Risk", "composite_score"], ascending=False)
+     .to_csv(anom_path, index=False, encoding="utf-8-sig"))
+else:
+    pd.DataFrame(columns=exp_cols).to_csv(anom_path, index=False, encoding="utf-8-sig")
 
 print(f"  OK {OUTPUT_PATH}")
 print(f"  OK {anom_path}")
+
+
+# ================================================================
+# EXPORT INCREMENTAL DATA_ANALYST
+# ================================================================
+run_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+_eid_c = next((c for c in ["event_id","Event_id"] if c in df_result.columns), None)
+
+print("\n" + "=" * 65)
+print("EXPORT INCREMENTAL — Data_Analyst/")
+print("=" * 65)
+incremental_save_to_data_analyst(
+    df_result[exp_cols],
+    DA_OUTPUT_PATH,
+    id_col=_eid_c,
+    run_ts=run_timestamp
+)
 
 
 # ================================================================
@@ -558,13 +642,7 @@ def _to_native(v):
     if isinstance(v, (np.bool_,)):    return bool(v)
     return v
 
-
 def save_os_anomalies_to_mongo(df: pd.DataFrame, run_ts: str) -> None:
-    """
-    Upsert par event_id si présent, insert sinon.
-    Collection dédiée : detected_os_anomalies.
-    Non bloquant — le pipeline continue si MongoDB est injoignable.
-    """
     print(f"  URI        : {MONGO_URI}")
     print(f"  Base       : {MONGO_DB}  |  Collection : {MONGO_COL}")
     print(f"  Documents  : {len(df):,}")
@@ -572,24 +650,17 @@ def save_os_anomalies_to_mongo(df: pd.DataFrame, run_ts: str) -> None:
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5_000)
         client.server_info()
         col = client[MONGO_DB][MONGO_COL]
-
         df_clean = df.copy()
         df_clean.replace([float("inf"), float("-inf")], None, inplace=True)
         df_clean = df_clean.where(df_clean.notna(), other=None)
         df_clean["pipeline_run_at"] = run_ts
-
-        docs = [
-            {k: _to_native(v) for k, v in row.items()}
-            for row in df_clean.to_dict(orient="records")
-        ]
-
+        docs = [{k: _to_native(v) for k, v in row.items()}
+                for row in df_clean.to_dict(orient="records")]
         has_event_id = "event_id" in df.columns
-
         if has_event_id:
-            operations = [
-                UpdateOne({"event_id": doc["event_id"]}, {"$set": doc}, upsert=True)
-                for doc in docs
-            ]
+            operations = [UpdateOne({"event_id": doc["event_id"]},
+                                    {"$set": doc}, upsert=True)
+                          for doc in docs]
             res = col.bulk_write(operations, ordered=False)
             print(f"  OK upsert  : {res.upserted_count} inseres | {res.modified_count} mis a jour")
         else:
@@ -598,23 +669,16 @@ def save_os_anomalies_to_mongo(df: pd.DataFrame, run_ts: str) -> None:
                 print(f"  Anciens docs supprimes : {deleted}")
             res = col.insert_many(docs, ordered=False)
             print(f"  OK insert  : {len(res.inserted_ids):,} documents inseres")
-
-        col.create_index("is_anomaly")
-        col.create_index("Anomaly_type")
-        col.create_index("Risk")
-        col.create_index("pipeline_run_at")
+        col.create_index("is_anomaly"); col.create_index("Anomaly_type")
+        col.create_index("Risk");       col.create_index("pipeline_run_at")
         if has_event_id:
             col.create_index("event_id", unique=True, sparse=True)
-
         client.close()
         print("  OK index crees / verifies")
-
     except Exception as exc:
         print(f"  ERREUR MongoDB : {exc}")
         print("  Le pipeline continue — les CSV ont bien ete sauvegardes.")
 
-
-run_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 save_os_anomalies_to_mongo(df_result[exp_cols], run_timestamp)
 
 
@@ -624,5 +688,6 @@ save_os_anomalies_to_mongo(df_result[exp_cols], run_timestamp)
 print("\n" + "=" * 65)
 print(f"  TERMINE — Anomalies : {n_anom:,} ({rate:.1f}%) | Critiques : {crit}")
 print(f"  Run timestamp       : {run_timestamp}")
-print(f"  Fichiers dans       : {OUTPUT_DIR}")
+print(f"  Fichiers locaux     : {OUTPUT_DIR}")
+print(f"  Data_Analyst        : {DA_OUTPUT_PATH}")
 print("=" * 65)

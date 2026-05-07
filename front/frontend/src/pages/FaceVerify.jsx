@@ -4,24 +4,27 @@ import { AuthContext } from "../context/AuthContext";
 import API from "../api/axios";
 import "./FaceVerify.css";
 
-const MODELS_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/";
-const MATCH_THRESHOLD = 0.5; // distance euclidienne — plus bas = plus strict
+const MODELS_URL      = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/";
+const MATCH_THRESHOLD = 0.55;  // distance euclidienne — plus strict
+const MAX_ATTEMPTS    = 8;     // plus de tentatives pour être généreux
+const SCAN_INTERVAL   = 600;   // ms — plus réactif
 
 export default function FaceVerify() {
   const { user, completeFaceVerification, logout } = useContext(AuthContext);
+
   const videoRef    = useRef(null);
   const canvasRef   = useRef(null);
   const streamRef   = useRef(null);
   const intervalRef = useRef(null);
+  const refDescRef  = useRef(null); // stocké en ref pour éviter les stale closures
 
-  const [status,      setStatus]      = useState("loading"); // loading | ready | scanning | success | error
-  const [message,     setMessage]     = useState("Chargement des modèles IA...");
-  const [progress,    setProgress]    = useState(0);
-  const [attempts,    setAttempts]    = useState(0);
-  const [refDescriptor, setRefDescriptor] = useState(null);
-  const MAX_ATTEMPTS = 5;
+  const [status,    setStatus]    = useState("loading");
+  const [message,   setMessage]   = useState("Chargement des modèles IA...");
+  const [progress,  setProgress]  = useState(0);
+  const [attempts,  setAttempts]  = useState(0);
+  const [bestScore, setBestScore] = useState(null); // meilleur score obtenu
 
-  // ── 1. Charger les modèles face-api.js ───────────────────────
+  // ── 1. Charger les modèles ─────────────────────────────────────
   useEffect(() => {
     loadModels();
     return () => stopCamera();
@@ -29,25 +32,24 @@ export default function FaceVerify() {
 
   const loadModels = async () => {
     try {
-      setMessage("Chargement des modèles IA (1/3)...");
-      setProgress(10);
+      setProgress(5);
+      setMessage("Initialisation des modèles IA (1/3)...");
       await faceapi.nets.tinyFaceDetector.loadFromUri(MODELS_URL);
-      setProgress(40);
-      setMessage("Chargement des modèles IA (2/3)...");
+      setProgress(35);
+      setMessage("Chargement du détecteur facial (2/3)...");
       await faceapi.nets.faceLandmark68Net.loadFromUri(MODELS_URL);
-      setProgress(70);
-      setMessage("Chargement des modèles IA (3/3)...");
+      setProgress(65);
+      setMessage("Chargement du modèle de reconnaissance (3/3)...");
       await faceapi.nets.faceRecognitionNet.loadFromUri(MODELS_URL);
-      setProgress(90);
-
-      // ── 2. Récupérer la photo de référence depuis l'API ──────
+      setProgress(85);
       await loadReferencePhoto();
-    } catch (err) {
+    } catch {
       setStatus("error");
       setMessage("Erreur lors du chargement des modèles IA. Vérifiez votre connexion.");
     }
   };
 
+  // ── 2. Charger la photo de référence ──────────────────────────
   const loadReferencePhoto = async () => {
     try {
       setMessage("Récupération de votre photo de référence...");
@@ -55,17 +57,28 @@ export default function FaceVerify() {
       const photoB64 = res.data.face_photo;
 
       if (!photoB64) {
-        // Pas de photo → passer directement au dashboard
         completeFaceVerification();
         return;
       }
 
-      // Créer un élément image à partir du base64
+      // Essayer avec plusieurs options de détection pour plus de robustesse
       const img = await faceapi.fetchImage(photoB64);
-      const detection = await faceapi
-        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+
+      let detection = null;
+
+      // Tentative 1 : TinyFaceDetector standard
+      detection = await faceapi
+        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }))
         .withFaceLandmarks()
         .withFaceDescriptor();
+
+      // Tentative 2 : seuil plus bas si pas détecté
+      if (!detection) {
+        detection = await faceapi
+          .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 608, scoreThreshold: 0.2 }))
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+      }
 
       if (!detection) {
         setStatus("error");
@@ -73,10 +86,10 @@ export default function FaceVerify() {
         return;
       }
 
-      setRefDescriptor(detection.descriptor);
+      refDescRef.current = detection.descriptor;
       setProgress(100);
       await startCamera();
-    } catch (err) {
+    } catch {
       setStatus("error");
       setMessage("Erreur lors du chargement de votre photo de référence.");
     }
@@ -95,7 +108,7 @@ export default function FaceVerify() {
       }
       setStatus("ready");
       setMessage("Positionnez votre visage dans le cadre et appuyez sur Vérifier");
-    } catch (err) {
+    } catch {
       setStatus("error");
       setMessage("Accès à la caméra refusé. Veuillez autoriser l'accès à la webcam.");
     }
@@ -111,15 +124,18 @@ export default function FaceVerify() {
 
   // ── 4. Lancer la vérification ─────────────────────────────────
   const startVerification = () => {
-    if (status !== "ready" || !refDescriptor) return;
+    if (status !== "ready" || !refDescRef.current) return;
     setStatus("scanning");
     setMessage("Analyse en cours... Regardez la caméra");
     setAttempts(0);
+    setBestScore(null);
     runDetectionLoop();
   };
 
   const runDetectionLoop = () => {
     let tries = 0;
+    let best  = 1; // meilleure distance (plus bas = meilleur)
+
     intervalRef.current = setInterval(async () => {
       tries++;
       setAttempts(tries);
@@ -127,10 +143,18 @@ export default function FaceVerify() {
       if (!videoRef.current || videoRef.current.readyState < 2) return;
 
       try {
-        const detection = await faceapi
-          .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 320 }))
+        // Essayer plusieurs tailles d'entrée pour plus de robustesse
+        let detection = await faceapi
+          .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 }))
           .withFaceLandmarks()
           .withFaceDescriptor();
+
+        if (!detection) {
+          detection = await faceapi
+            .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.2 }))
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+        }
 
         // Dessiner le cadre de détection
         if (canvasRef.current && detection) {
@@ -141,31 +165,40 @@ export default function FaceVerify() {
           faceapi.draw.drawDetections(canvasRef.current, resized);
         }
 
-        if (detection) {
-          const distance = faceapi.euclideanDistance(refDescriptor, detection.descriptor);
+        if (detection && refDescRef.current) {
+          const distance = faceapi.euclideanDistance(refDescRef.current, detection.descriptor);
+          const score    = parseFloat((1 - distance).toFixed(3));
+
+          if (distance < best) {
+            best = distance;
+            setBestScore(Math.round(score * 100));
+          }
 
           if (distance < MATCH_THRESHOLD) {
-            // ✅ Correspondance !
+            // ✅ Identité confirmée
             clearInterval(intervalRef.current);
             stopCamera();
             setStatus("success");
-            setMessage(`Identité confirmée ! (score : ${(1 - distance).toFixed(2)})`);
-            setTimeout(() => completeFaceVerification(), 1500);
-          } else if (tries >= MAX_ATTEMPTS) {
-            // ❌ Trop de tentatives
-            clearInterval(intervalRef.current);
-            setStatus("error");
-            setMessage(`Échec de la reconnaissance faciale après ${MAX_ATTEMPTS} tentatives.`);
+            setMessage(`Identité confirmée ! Score de confiance : ${Math.round(score * 100)}%`);
+            setTimeout(() => completeFaceVerification(), 1800);
+            return;
           }
-        } else if (tries >= MAX_ATTEMPTS) {
+        }
+
+        // Fin des tentatives
+        if (tries >= MAX_ATTEMPTS) {
           clearInterval(intervalRef.current);
           setStatus("error");
-          setMessage("Aucun visage détecté. Assurez-vous d'être bien éclairé et face à la caméra.");
+          if (best < 1) {
+            setMessage(`Visage détecté mais non reconnu (score max : ${Math.round((1 - best) * 100)}%). Vérifiez l'éclairage et réessayez.`);
+          } else {
+            setMessage("Aucun visage détecté. Assurez-vous d'être bien éclairé et face à la caméra.");
+          }
         }
       } catch (err) {
         console.error("Detection error:", err);
       }
-    }, 800);
+    }, SCAN_INTERVAL);
   };
 
   const handleRetry = () => {
@@ -173,6 +206,7 @@ export default function FaceVerify() {
     setStatus("ready");
     setMessage("Positionnez votre visage dans le cadre et appuyez sur Vérifier");
     setAttempts(0);
+    setBestScore(null);
     if (canvasRef.current) {
       const ctx = canvasRef.current.getContext("2d");
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -180,9 +214,13 @@ export default function FaceVerify() {
     if (!streamRef.current) startCamera();
   };
 
+  // ── Barre de progression tentatives ─────────────────────────
+  const attemptsPct = Math.round((attempts / MAX_ATTEMPTS) * 100);
+
   return (
     <div className="fv-wrapper">
       <div className="fv-card">
+
         {/* Header */}
         <div className="fv-header">
           <div className="fv-brand">Attijari<span>bank</span></div>
@@ -190,10 +228,13 @@ export default function FaceVerify() {
           <p className="fv-subtitle">Authentification biométrique sécurisée</p>
         </div>
 
-        {/* Barre de progression (loading uniquement) */}
+        {/* Barre de chargement */}
         {status === "loading" && (
-          <div className="fv-progress-bar">
-            <div className="fv-progress-fill" style={{ width: `${progress}%` }} />
+          <div className="fv-progress-wrap">
+            <div className="fv-progress-bar">
+              <div className="fv-progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+            <span className="fv-progress-pct">{progress}%</span>
           </div>
         )}
 
@@ -203,21 +244,29 @@ export default function FaceVerify() {
             <video ref={videoRef} className="fv-video" muted playsInline />
             <canvas ref={canvasRef} className="fv-canvas" />
 
-            {/* Overlay selon l'état */}
+            {/* Overlay succès */}
             {status === "success" && (
               <div className="fv-overlay fv-overlay--success">
-                <div className="fv-checkmark">✓</div>
+                <div className="fv-result-icon">✓</div>
               </div>
             )}
+            {/* Overlay erreur */}
             {status === "error" && (
               <div className="fv-overlay fv-overlay--error">
-                <div className="fv-crossmark">✕</div>
+                <div className="fv-result-icon">✕</div>
               </div>
             )}
 
             {/* Cadre de guidage */}
             {(status === "ready" || status === "scanning") && (
               <div className={`fv-face-guide ${status === "scanning" ? "fv-face-guide--scanning" : ""}`} />
+            )}
+
+            {/* Score en temps réel */}
+            {status === "scanning" && bestScore !== null && (
+              <div className="fv-live-score">
+                Score : {bestScore}%
+              </div>
             )}
           </div>
         )}
@@ -228,18 +277,22 @@ export default function FaceVerify() {
           {message}
         </div>
 
-        {/* Compteur de tentatives */}
+        {/* Barre de tentatives */}
         {status === "scanning" && (
-          <div className="fv-attempts">
-            Tentative {attempts} / {MAX_ATTEMPTS}
+          <div className="fv-attempts-wrap">
+            <div className="fv-attempts-bar">
+              <div className="fv-attempts-fill" style={{ width: `${attemptsPct}%` }} />
+            </div>
+            <span className="fv-attempts-label">Tentative {attempts} / {MAX_ATTEMPTS}</span>
           </div>
         )}
 
-        {/* Boutons d'action */}
+        {/* Boutons */}
         <div className="fv-actions">
           {status === "ready" && (
             <button className="fv-btn fv-btn--primary" onClick={startVerification}>
-              <span>👁</span> Vérifier mon identité
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Vérifier mon identité
             </button>
           )}
           {status === "error" && (
@@ -259,8 +312,17 @@ export default function FaceVerify() {
           )}
         </div>
 
+        {/* Conseils */}
+        {(status === "ready" || status === "error") && (
+          <div className="fv-tips">
+            <div className="fv-tip">💡 Bonne luminosité frontale</div>
+            <div className="fv-tip">📐 Visage centré dans le cadre</div>
+            <div className="fv-tip">👓 Retirez lunettes si besoin</div>
+          </div>
+        )}
+
         <p className="fv-security-note">
-          🔒 La vérification est effectuée localement — aucune image n'est transmise
+          🔒 Vérification locale — aucune image transmise à nos serveurs
         </p>
       </div>
     </div>

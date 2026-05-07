@@ -2,57 +2,47 @@ from pydantic import BaseModel, EmailStr
 from enum import Enum
 from typing import Optional
 
-# -------------------------
-# Rôles utilisateur
-# -------------------------
+# ── Rôles ────────────────────────────────────────────────────
 class RoleEnum(str, Enum):
-    admin = "admin"
+    admin    = "admin"
     employer = "employer"
 
-# -------------------------
-# Création d'utilisateur
-# -------------------------
+# ── Création d'utilisateur (signup) ──────────────────────────
 class UserCreate(BaseModel):
-    email: EmailStr
-    password: str
-    role: RoleEnum = RoleEnum.employer
+    email:      EmailStr
+    password:   str
+    first_name: Optional[str] = ""
+    last_name:  Optional[str] = ""
+    role:       RoleEnum = RoleEnum.employer
 
-# -------------------------
-# Utilisateur retourné
-# -------------------------
+# ── Utilisateur retourné ──────────────────────────────────────
 class UserOut(BaseModel):
-    id: Optional[str]
-    email: EmailStr
-    role: RoleEnum
-    is_active: bool
+    id:         Optional[str]
+    email:      EmailStr
+    role:       RoleEnum
+    is_active:  bool
+    first_name: Optional[str] = ""
+    last_name:  Optional[str] = ""
 
     class Config:
         from_attributes = True
 
-# -------------------------
-# Login
-# -------------------------
+# ── Login ─────────────────────────────────────────────────────
 class LoginSchema(BaseModel):
-    email: EmailStr
+    email:    EmailStr
     password: str
 
-# -------------------------
-# Token JWT
-# -------------------------
+# ── Token JWT ─────────────────────────────────────────────────
 class Token(BaseModel):
     access_token: str
-    token_type: str
+    token_type:   str
 
-# -------------------------
-# Forgot Password
-# -------------------------
+# ── Forgot Password ───────────────────────────────────────────
 class ForgotPasswordSchema(BaseModel):
     email: EmailStr
 
-# -------------------------
-# Reset Password
-# -------------------------
+# ── Reset Password ────────────────────────────────────────────
 class ResetPasswordSchema(BaseModel):
-    email: EmailStr
-    code: str
+    email:        EmailStr
+    code:         str
     new_password: str
