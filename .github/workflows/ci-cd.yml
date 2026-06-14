@@ -133,6 +133,9 @@ jobs:
     name: "🐳 Docker Build & Trivy Container Scan"
     runs-on: ubuntu-latest
     needs: security-and-tests  # Ne s'exécute qu'après succès des tests
+    permissions:
+      security-events: write  # Requis pour uploader les résultats SARIF vers GitHub Security
+      contents: read
 
     steps:
     - uses: actions/checkout@v4
