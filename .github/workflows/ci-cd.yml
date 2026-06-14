@@ -68,7 +68,7 @@ jobs:
       env:
         SECRET_KEY: "CI_TEST_SECRET_KEY_NOT_FOR_PROD"
         LOG_SIGNING_KEY: "CI_TEST_LOG_SIGNING_KEY_32_CHARS_MIN"
-        DATA_ENCRYPTION_KEY: "BycexPYoRliQhSDaG0XXceud9Q8J8hMnx3Z0JjGuQjI="
+        DATA_ENCRYPTION_KEY: "dGhpcy1pcy1hLWR1bW15LWtleS1mb3ItY2ktdGVzdHM=" # dummy base64 key
         RSA_PRIVATE_KEY: ${{ secrets.CI_RSA_PRIVATE_KEY }}
         RSA_PUBLIC_KEY: ${{ secrets.CI_RSA_PUBLIC_KEY }}
         ENV: "test"

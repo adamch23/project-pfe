@@ -1,0 +1,5 @@
+[allowlist]
+description = "Ignore false positives in AI training/mapping data"
+paths = [
+    "backend/app/explainable_AI/faiss_index/ids.json"
+]
