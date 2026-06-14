@@ -11,7 +11,7 @@ headers = {
 }
 
 try:
-    response = requests.post(url, data=json.dumps(payload), headers=headers)
+    response = requests.post(url, data=json.dumps(payload), headers=headers, timeout=10)
     print(f"Status: {response.status_code}")
     print(f"Body: {response.text}")
 except Exception as e:

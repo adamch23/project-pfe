@@ -25,16 +25,17 @@ print(f"Chemin: {os.getcwd()}")
 print("\n[2] Test des imports...")
 imports_status = {}
 
+import importlib
 for module in ["pandas", "numpy", "requests", "pymongo", "torch", "sentence_transformers", "chromadb", "faiss"]:
     try:
+        mod = importlib.import_module(module)
         if module == "torch":
-            exec(f"import {module}")
+            import torch
             print(f"✅ {module} OK - CUDA: {torch.cuda.is_available()}")
         elif module == "sentence_transformers":
-            exec(f"from {module} import SentenceTransformer")
+            from sentence_transformers import SentenceTransformer
             print(f"✅ {module} OK")
         else:
-            exec(f"import {module}")
             print(f"✅ {module} OK")
         imports_status[module] = True
     except Exception as e:
