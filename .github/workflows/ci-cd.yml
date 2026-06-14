@@ -5,6 +5,7 @@ on:
     branches: [ "main", "develop" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:  # Permet le lancement manuel depuis l'interface GitHub
 
 jobs:
   # ── PHASE 1 : Scan de secrets (Bloquant — Finding SEC-01) ────────────────
