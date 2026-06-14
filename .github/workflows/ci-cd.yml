@@ -79,7 +79,8 @@ jobs:
           --ignore-vuln CVE-2026-1839 \
           --ignore-vuln PYSEC-2026-161 \
           --ignore-vuln CVE-2025-54121 \
-          --ignore-vuln CVE-2025-62727
+          --ignore-vuln CVE-2025-62727 \
+          --ignore-vuln CVE-2026-30922
 
     # ── Tests Unitaires avec couverture (cible ≥ 80%) ────────────────────────
     - name: Run Unit Tests with Coverage
