@@ -132,10 +132,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Security Headers Middleware (Pass-through) ──────────────────────────
+# ── Security Headers Middleware (Finding SEC-04 — Audit Bancaire) ──────────────
+@app.middleware("http")
+async def correlation_id_middleware(request: Request, call_next):
+    """Injecte un correlation_id unique pour chaque requête (Finding BCP-03)."""
+    correlation_id = request.headers.get("X-Correlation-ID", str(uuid.uuid4()))
+    request.state.correlation_id = correlation_id
+    return await call_next(request)
+
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
-    return await call_next(request)
+    response = await call_next(request)
+    # ── Headers de sécurité obligatoires (PCI-DSS, OWASP) ─────────
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = "default-src 'self'"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    # ── Correlation ID tracé (Finding BCP-03) ──────────────────────
+    correlation_id = getattr(request.state, "correlation_id", str(uuid.uuid4()))
+    response.headers["X-Correlation-ID"] = correlation_id
+    return response
 
 @app.middleware("http")
 async def cookie_to_auth_header_middleware(request: Request, call_next):
