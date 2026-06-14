@@ -19,6 +19,7 @@ jobs:
       uses: gitleaks/gitleaks-action@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
   # ── PHASE 2 : Tests de sécurité et unitaires ─────────────────────────────
   security-and-tests:
@@ -31,6 +32,9 @@ jobs:
         image: mongo:6.0
         ports:
           - 27017:27017
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
     - uses: actions/checkout@v4
@@ -47,9 +51,7 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest pytest-asyncio pytest-cov httpx motor passlib[bcrypt] \
-          python-jose[cryptography] cryptography python-dotenv pydantic[email] \
-          uvicorn fastapi bandit pip-audit
+        pip install -r backend/requirements.txt
 
     # ── SAST : Analyse statique de sécurité du code source ──────────────────
     - name: Run SAST Scan (Bandit)
