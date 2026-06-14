@@ -1,5 +1,5 @@
 # ── Build Stage ──
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -11,8 +11,11 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Installation de Torch version CPU (plus léger et stable pour Docker)
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+# Mise à jour de pip et wheel pour corriger les CVEs (CVE-2026-24049)
+RUN pip install --no-cache-dir --upgrade pip "wheel>=0.46.2" "jaraco.context>=6.1.0"
+
+# Installation de Torch version CPU sécurisée (>=2.6.0 pour corriger CVE-2025-32434)
+RUN pip install --no-cache-dir "torch>=2.6.0" --index-url https://download.pytorch.org/whl/cpu
 
 # Installation des autres dépendances Python
 COPY requirements.txt .
