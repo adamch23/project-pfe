@@ -112,6 +112,13 @@ jobs:
         name: coverage-report
         path: backend/htmlcov/
 
+    - name: Upload JUnit Test Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: junit-report
+        path: backend/junit-report.xml
+
     - name: Upload Security Reports
       if: always()
       uses: actions/upload-artifact@v4
