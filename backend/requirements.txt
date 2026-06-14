@@ -10,6 +10,8 @@
 fastapi==0.116.0
 uvicorn[standard]==0.32.1
 python-multipart==0.0.27
+wheel>=0.46.2
+jaraco.context>=6.1.0
 
 # ── Base de données ────────────────────────────────────────────────
 motor==3.6.0
@@ -41,6 +43,7 @@ openai==1.58.1
 chromadb==0.5.20
 faiss-cpu==1.9.0
 sentence-transformers==3.3.1
+jaraco.context>=6.1.0
 torch>=2.6.0
 pypdf==6.12.0
 

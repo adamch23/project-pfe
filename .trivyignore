@@ -12,3 +12,11 @@ CVE-2026-30922
 CVE-2025-54121
 CVE-2025-62727
 PYSEC-2026-161
+
+# wheel 0.45.1 → package de build de la base image Python officielle
+# Non-exposé au runtime, impact opérationnel nul en production
+CVE-2026-24049
+
+# jaraco.context → dépendance transitive de chromadb==0.5.20 qui force 5.3.0
+# Non-exposé au runtime, package utilitaire interne à chromadb
+CVE-2026-23949
