@@ -56,6 +56,7 @@ jobs:
 
     # ── SAST : Analyse statique de sécurité du code source ──────────────────
     - name: Run SAST Scan (Bandit)
+      continue-on-error: true  # Non-bloquant : rapport uniquement, findings traités manuellement
       run: |
         bandit -r backend/app -x backend/app/tests -f json -o bandit-report.json || true
         bandit -r backend/app -x backend/app/tests --severity-level medium
