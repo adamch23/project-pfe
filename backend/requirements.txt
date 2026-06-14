@@ -7,7 +7,7 @@
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # ── API Framework ──────────────────────────────────────────────────
-fastapi==0.115.6
+fastapi==0.115.8
 uvicorn[standard]==0.32.1
 python-multipart==0.0.27
 
@@ -41,6 +41,8 @@ openai==1.58.1
 chromadb==0.5.20
 faiss-cpu==1.9.0
 sentence-transformers==3.3.1
+transformers==4.60.0
+torch==2.13.0
 pypdf==6.12.0
 
 # ── Configuration ──────────────────────────────────────────────────
