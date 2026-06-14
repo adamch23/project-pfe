@@ -1,0 +1,57 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# requirements.txt — Dépendances Python (Banking Grade)
+# Finding PROC-03 (Audit Bancaire) : Versions épinglées pour
+# reproductibilité des builds et contrôle des vulnérabilités CVE.
+# Vérification : pip-audit -r requirements.txt
+# Mise à jour : pip-compile requirements.in (via pip-tools)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# ── API Framework ──────────────────────────────────────────────────
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.12
+
+# ── Base de données ────────────────────────────────────────────────
+motor==3.6.0
+
+# ── Validation des données ─────────────────────────────────────────
+pydantic[email]==2.10.3
+
+# ── Sécurité & Cryptographie ───────────────────────────────────────
+cryptography==44.0.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# ── HTTP Client ────────────────────────────────────────────────────
+httpx==0.28.0
+
+# ── Tests ──────────────────────────────────────────────────────────
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+
+# ── Data Science ───────────────────────────────────────────────────
+pandas==2.2.3
+
+# ── Monitoring ─────────────────────────────────────────────────────
+prometheus-client==0.21.1
+
+# ── IA / LLM ───────────────────────────────────────────────────────
+openai==1.58.1
+chromadb==0.5.20
+faiss-cpu==1.9.0
+sentence-transformers==3.3.1
+pypdf==5.1.0
+
+# ── Configuration ──────────────────────────────────────────────────
+python-dotenv==1.0.1
+
+# ── Email ──────────────────────────────────────────────────────────
+aiosmtplib==3.0.2
+
+# ── Sécurité CI/CD (Finding PROC-03 / BCP-04) ─────────────────────
+# pip-audit : SCA — vérification des CVE dans les dépendances
+# bandit    : SAST — analyse statique du code source
+# gitleaks  : scan de secrets (intégré en CI/CD)
+pip-audit==2.7.3
+bandit==1.8.0

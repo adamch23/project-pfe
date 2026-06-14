@@ -1,0 +1,83 @@
+# docker-compose.uat.yml — Environnement de Validation (UAT)
+# Finding GOV-03 (Audit Bancaire) : Ségrégation DEV / UAT / PROD
+#
+# Usage : docker compose -f docker-compose.uat.yml up
+# Caractéristiques UAT :
+#   - Miroir de PROD (même image, mêmes protections)
+#   - Données de test masquées (pas de données réelles)
+#   - TLS activé avec certificat self-signed
+#   - Ports restreints (uniquement 443)
+#   - Variables d'env depuis .env.uat (valeurs fictives)
+
+services:
+  nginx:
+    image: nginx:1.25-alpine
+    ports:
+      - "443:443"
+    volumes:
+      - ./Load_Balencer+Health_check/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs/uat:/etc/nginx/certs:ro
+    networks:
+      - uat-frontend
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+    env_file: .env.uat
+    environment:
+      - ENV=uat
+      - MONGO_URL=mongodb://mongodb:27017
+      - RSA_PRIVATE_KEY=${RSA_PRIVATE_KEY_UAT}
+      - RSA_PUBLIC_KEY=${RSA_PUBLIC_KEY_UAT}
+    networks:
+      - uat-frontend
+      - uat-database
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  mongodb:
+    image: mongo:6.0
+    volumes:
+      - uat_mongodb_data:/data/db
+    networks:
+      - uat-database
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 20s
+      timeout: 10s
+      retries: 3
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./Monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - uat-frontend
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD_UAT}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - uat-frontend
+
+networks:
+  uat-frontend:
+    driver: bridge
+  uat-database:
+    driver: bridge
+    internal: true
+
+volumes:
+  uat_mongodb_data:

@@ -1,0 +1,22 @@
+# 🛡️ EXEMPLE DE CONFIGURATION SÉCURISÉE (PAS DE SECRETS ICI)
+# Copiez ce fichier vers .env et remplissez les valeurs.
+
+# ── Sécurité (Générer des clés fortes !) ──
+SECRET_KEY=votre_cle_jwt_tres_longue_et_aleatoire
+LOG_SIGNING_KEY=votre_cle_hmac_pour_les_logs
+DATA_ENCRYPTION_KEY=votre_cle_fernet_32_bytes_base64
+
+# ── Admin par défaut (Uniquement pour le premier démarrage) ──
+DEFAULT_ADMIN_EMAIL=admin@votrebanque.tn
+DEFAULT_ADMIN_PASSWORD=Changer_Ce_Mot_De_Passe_Immediatement!
+
+# ── Configuration Environnement ──
+ENV=dev # Ou 'prod' pour activer HTTPS obligatoirement
+MONGO_URL=mongodb://mongodb:27017
+DATABASE_NAME=audit_ia_db
+
+# ── Emailing (SMTP) ──
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=votre_email@gmail.com
+SMTP_PASSWORD=votre_mot_de_passe_application_ou_secret

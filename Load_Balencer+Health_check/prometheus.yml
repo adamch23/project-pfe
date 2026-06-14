@@ -1,0 +1,30 @@
+# prometheus.yml — Configuration Expert Monitoring (Phase 6)
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# ── Règles d'alerte (Finding MON-01 — Audit Bancaire) ─────────────
+rule_files:
+  - "/etc/prometheus/alert_rules.yml"
+
+scrape_configs:
+  # Monitoring de l'API FastAPI
+  - job_name: 'fastapi-api'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['backend:8000']
+
+  # Monitoring de MongoDB via l'exporter
+  - job_name: 'mongodb'
+    static_configs:
+      - targets: ['mongodb-exporter:9216']
+
+  # Monitoring de Nginx
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']

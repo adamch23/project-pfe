@@ -1,0 +1,304 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+/* ─── ATTIJARI BRAND TOKENS ───────────────────────────────────────── */
+:root {
+  --atj-gold:        #FFB81C;
+  --atj-gold-light:  #FFD166;
+  --atj-gold-dim:    rgba(255, 184, 28, 0.12);
+  --atj-gold-glow:   rgba(255, 184, 28, 0.25);
+  --atj-red:         #E03E2D;
+  --atj-red-dim:     rgba(224, 62, 45, 0.1);
+  --atj-black:       #0A0A0F;
+  --atj-surface:     #111118;
+  --atj-surface2:    #18181F;
+  --atj-border:      rgba(255, 184, 28, 0.14);
+  --atj-white:       #F5F0E8;
+  --atj-muted:       #6B6A72;
+  --font-display:    'Playfair Display', Georgia, serif;
+  --font-body:       'Plus Jakarta Sans', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ─── WRAPPER ─────────────────────────────────────────────────────── */
+.nf-wrapper {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--atj-black);
+  font-family: var(--font-body);
+  overflow: hidden;
+}
+
+/* ─── PARTICLE CANVAS ─────────────────────────────────────────────── */
+.nf-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── GRID ────────────────────────────────────────────────────────── */
+.nf-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,184,28,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,184,28,.04) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, black 30%, transparent 100%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ─── DECORATIVE ORBS ─────────────────────────────────────────────── */
+.nf-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.nf-orb--gold {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(255,184,28,.14) 0%, transparent 70%);
+  top: -120px;
+  right: -80px;
+  animation: orbFloat 10s ease-in-out infinite;
+}
+
+.nf-orb--red {
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(circle, rgba(224,62,45,.1) 0%, transparent 70%);
+  bottom: -80px;
+  left: -60px;
+  animation: orbFloat 13s ease-in-out infinite reverse;
+}
+
+@keyframes orbFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%       { transform: translateY(-40px) scale(1.08); }
+}
+
+/* ─── CONTAINER ───────────────────────────────────────────────────── */
+.nf-container {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 60px 40px;
+  max-width: 640px;
+  width: 100%;
+  animation: nfFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes nfFadeUp {
+  from { opacity: 0; transform: translateY(32px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── BRAND ───────────────────────────────────────────────────────── */
+.nf-brand {
+  font-family: var(--font-body);
+  font-size: 20px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: rgba(245, 240, 232, 0.5);
+  margin-bottom: 52px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.nf-brand:hover { color: var(--atj-white); }
+.nf-brand span { color: var(--atj-gold); }
+
+/* ─── 404 DISPLAY ─────────────────────────────────────────────────── */
+.nf-code-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 40px;
+  line-height: 1;
+}
+
+.nf-digit {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(100px, 16vw, 152px);
+  color: var(--atj-gold);
+  text-shadow:
+    0 0 60px rgba(255,184,28,.35),
+    0 0 120px rgba(255,184,28,.12);
+  display: inline-block;
+}
+
+.nf-digit--1 { animation: digitBounce 3.2s ease-in-out infinite; }
+.nf-digit--2 { animation: digitBounce 3.2s ease-in-out infinite 0.5s; }
+
+@keyframes digitBounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-10px); }
+}
+
+/* ─── ZERO WITH ORBIT ─────────────────────────────────────────────── */
+.nf-zero-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: digitBounce 3.2s ease-in-out infinite 0.25s;
+}
+
+.nf-zero-svg {
+  width: clamp(80px, 13vw, 124px);
+  height: clamp(95px, 15.5vw, 148px);
+  filter: drop-shadow(0 0 20px rgba(255,184,28,.4));
+}
+
+.nf-orbit-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--atj-gold);
+  border-radius: 50%;
+  box-shadow: 0 0 14px var(--atj-gold);
+  top: 12%;
+  left: 50%;
+  transform-origin: 0 calc(clamp(40px, 6.5vw, 62px));
+  animation: orbit 3s linear infinite;
+}
+
+@keyframes orbit {
+  from { transform: rotate(0deg) translateX(-5px); }
+  to   { transform: rotate(360deg) translateX(-5px); }
+}
+
+/* ─── DIVIDER ─────────────────────────────────────────────────────── */
+.nf-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 32px;
+  width: 260px;
+}
+
+.nf-divider-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,184,28,.4), transparent);
+}
+
+.nf-divider-diamond {
+  width: 8px;
+  height: 8px;
+  background: var(--atj-gold);
+  transform: rotate(45deg);
+  box-shadow: 0 0 10px var(--atj-gold);
+  animation: diamondPulse 2.4s ease-in-out infinite;
+}
+
+@keyframes diamondPulse {
+  0%, 100% { opacity: 1; transform: rotate(45deg) scale(1); }
+  50%       { opacity: 0.4; transform: rotate(45deg) scale(0.7); }
+}
+
+/* ─── TITLE & SUBTITLE ────────────────────────────────────────────── */
+.nf-title {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 4vw, 34px);
+  font-weight: 700;
+  color: var(--atj-white);
+  margin-bottom: 16px;
+  letter-spacing: 0.4px;
+}
+
+.nf-sub {
+  font-size: 15px;
+  color: var(--atj-muted);
+  line-height: 1.75;
+  max-width: 440px;
+  margin-bottom: 44px;
+}
+
+/* ─── BUTTONS ─────────────────────────────────────────────────────── */
+.nf-actions {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 44px;
+}
+
+.nf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 28px;
+  border-radius: 5px;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  border: none;
+  outline: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.nf-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,.12);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.nf-btn:hover::after { opacity: 1; }
+.nf-btn:active { transform: scale(0.97); }
+
+.nf-btn--primary {
+  background: var(--atj-gold);
+  color: #0A0A0F;
+}
+.nf-btn--primary:hover {
+  background: var(--atj-gold-light);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(255,184,28,.35);
+}
+
+.nf-btn--secondary {
+  background: transparent;
+  color: var(--atj-muted);
+  border: 1px solid rgba(255,255,255,.1);
+}
+.nf-btn--secondary:hover {
+  border-color: rgba(255,184,28,.35);
+  color: var(--atj-gold);
+  transform: translateY(-2px);
+}
+
+/* ─── ERROR CODE FOOTER ───────────────────────────────────────────── */
+.nf-error-code {
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: rgba(255,255,255,.1);
+  text-transform: uppercase;
+  font-family: 'Courier New', monospace;
+}
+
+/* ─── RESPONSIVE ──────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .nf-container { padding: 40px 24px; }
+  .nf-actions { flex-direction: column; align-items: stretch; }
+  .nf-btn { justify-content: center; }
+  .nf-orbit-dot { display: none; }
+}

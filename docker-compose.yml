@@ -1,0 +1,219 @@
+services:
+  # 🔵 Frontend Layer
+  frontend:
+    build:
+      context: ./front/frontend
+    networks:
+      - frontend-net
+    restart: unless-stopped
+
+  # 🟣 Gateway Layer (Load Balancer & SSL Termination)
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: nginx_gateway
+    volumes:
+      - ./Load_Balencer+Health_check/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    networks:
+      - frontend-net
+    restart: unless-stopped
+
+  # 🚀 Backend API Layer (Scalable — lancer avec: docker compose up --scale backend=2)
+  backend:
+    build:
+      context: ./backend
+    env_file: .env
+    # Finding DATA-01 / SEC-01 (Audit Bancaire) : Injecter les clés RSA via variables
+    # d'environnement plutôt que par le filesystem.
+    # En production avec Docker Swarm, remplacer par :
+    #   secrets: [rsa_private_key, rsa_public_key]
+    # et lire via /run/secrets/rsa_private_key
+    environment:
+      - RSA_PRIVATE_KEY=${RSA_PRIVATE_KEY}
+      - RSA_PUBLIC_KEY=${RSA_PUBLIC_KEY}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - frontend-net
+      - backend-net
+      - database-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  # 🗄️ Data Layer
+  mongodb:
+    image: mongo:6.0
+    container_name: mongodb_prod
+    volumes:
+      - mongodb_data:/data/db
+      - backup_data:/data/backups
+    networks:
+      - database-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # 📊 Monitoring Stack
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./Monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./Monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=90d'     # Rétention 90 jours (audit DATA-01)
+      - '--web.enable-lifecycle'                  # Hot-reload de la config
+    networks:
+      - monitoring-net
+      - backend-net
+    restart: unless-stopped
+
+  # 🔔 AlertManager — Escalade P1/P2/P3 (Finding BCP-01 — Audit Bancaire)
+  alertmanager:
+    image: prom/alertmanager:latest
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./Monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - monitoring-net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-ChangeMe2026!}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_DISABLE_GRAVATAR=true
+      - GF_ANALYTICS_REPORTING_ENABLED=false   # Confidentialité : désactiver la télémétrie
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - monitoring-net
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # ── Finding ARCH-05 (Audit Bancaire) : Exporters manquants ajoutés ──────
+  # Ces services étaient référencés dans prometheus.yml mais absents du compose.
+
+  # 📦 MongoDB Exporter — Métriques MongoDB (pour l'alerte MongoDBDown)
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.40
+    container_name: mongodb_exporter
+    command:
+      - '--mongodb.uri=mongodb://mongodb:27017'
+      - '--collect-all'
+    ports:
+      - "9216:9216"
+    networks:
+      - monitoring-net
+      - database-net
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # 🐳 cAdvisor — Métriques conteneurs Docker (pour l'alerte HighMemoryUsage)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8080:8080"
+    networks:
+      - monitoring-net
+    restart: unless-stopped
+
+  # 📝 Loki — Agrégation de logs (Finding BCP-03 — Audit Bancaire)
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    volumes:
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - monitoring-net
+    restart: unless-stopped
+
+  # 🔍 Promtail — Agent de collecte des logs vers Loki
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - monitoring-net
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  # ☁️ Cloudflare Tunnel — Exposition sécurisée "Bank Grade"
+  # Permet d'exposer l'application sans ouvrir de ports sur le routeur
+  cloudflare-tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflare_tunnel
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    networks:
+      - frontend-net
+    depends_on:
+      - nginx
+    restart: unless-stopped
+
+networks:
+  frontend-net:
+    driver: bridge
+  backend-net:
+    driver: bridge
+  database-net:
+    driver: bridge
+    internal: true      # Sécurité : réseau DB inaccessible depuis l'extérieur
+  monitoring-net:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  backup_data:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+  logs_data:
+  models_data:
+  loki_data:           # Finding BCP-03 : Loki log aggregation

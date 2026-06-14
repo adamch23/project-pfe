@@ -1,0 +1,65 @@
+# docker-compose.dev.yml — Environnement de Développement
+# Finding GOV-03 (Audit Bancaire) : Ségrégation DEV / UAT / PROD
+#
+# Usage : docker compose -f docker-compose.dev.yml up
+# Caractéristiques DEV :
+#   - Hot-reload activé (uvicorn --reload)
+#   - Volume monté en live (code source)
+#   - Pas de TLS (HTTP uniquement)
+#   - Outils de debug exposés (ports Mongo, Prometheus)
+#   - Variables d'env depuis .env local
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      - ENV=dev
+      - MONGO_URL=mongodb://mongodb:27017
+    volumes:
+      - ./backend/app:/app/app:ro    # Hot-reload : code source monté
+    ports:
+      - "8000:8000"                  # Exposé directement pour debug
+    networks:
+      - dev-net
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    depends_on:
+      - mongodb
+
+  mongodb:
+    image: mongo:6.0
+    ports:
+      - "27017:27017"                # Exposé pour accès direct (Compass, etc.)
+    volumes:
+      - dev_mongodb_data:/data/db
+    networks:
+      - dev-net
+
+  # Monitoring léger en DEV
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./Monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - dev-net
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=dev-admin-2026
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - dev-net
+
+networks:
+  dev-net:
+    driver: bridge
+
+volumes:
+  dev_mongodb_data:

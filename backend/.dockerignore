@@ -1,0 +1,41 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# ── Secrets & Clés (Finding SEC-01 / DATA-01 — Audit Bancaire) ──────────────
+# CRITIQUE: Ces fichiers ne doivent JAMAIS être inclus dans l'image Docker.
+# En production, injectez les clés RSA via Docker Secrets ou variables d'environnement.
+.env
+.env.*
+*.pem
+*.key
+private_key.pem
+public_key.pem
+
+# ── Git ──────────────────────────────────────────────────────────────────────
+.git
+.gitignore
+.github/
+
+# ── IDE ──────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+
+# ── Tests (non nécessaires en prod) ─────────────────────────────────────────
+tests/
+pytest.ini
+.pytest_cache/
+htmlcov/
+.coverage
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+server.log
+*.log
+
+# ── Scripts de déploiement ───────────────────────────────────────────────────
+scripts/

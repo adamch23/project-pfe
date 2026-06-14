@@ -1,0 +1,323 @@
+/* e:\front\frontend\src\features\face-verify\pages\FaceVerify\FaceVerify.css */
+:root {
+  --primary-gold: #c89d3c;
+  --primary-blue: #003366;
+  --secondary-blue: #0055a4;
+  --bg-dark: #0a192f;
+  --text-light: #f8f9fa;
+  --success-green: #2ecc71;
+  --error-red: #e74c3c;
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+.fv-wrapper {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, #112240 0%, #0a192f 100%);
+  padding: 20px;
+  font-family: 'Inter', sans-serif;
+}
+
+.fv-card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  padding: 40px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+}
+
+/* Background animated glow */
+.fv-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(200, 157, 60, 0.05) 0%, transparent 70%);
+  animation: rotateGlow 10s linear infinite;
+  z-index: -1;
+}
+
+@keyframes rotateGlow {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fv-brand {
+  font-weight: 800;
+  font-size: 1.5rem;
+  letter-spacing: -0.5px;
+  color: var(--text-light);
+  margin-bottom: 8px;
+}
+
+.fv-brand span {
+  color: var(--primary-gold);
+}
+
+.fv-title {
+  color: var(--text-light);
+  font-size: 1.8rem;
+  margin-bottom: 4px;
+}
+
+.fv-subtitle {
+  color: #8892b0;
+  font-size: 0.95rem;
+  margin-bottom: 30px;
+}
+
+/* Video Container */
+.fv-video-container {
+  position: relative;
+  width: 320px;
+  height: 320px;
+  margin: 0 auto 30px;
+  border-radius: 50%;
+  border: 4px solid var(--glass-border);
+  overflow: hidden;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.3);
+  background: #000;
+}
+
+.fv-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.fv-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  transform: scaleX(-1);
+}
+
+/* Biometric HUD Overlay */
+.fv-hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.fv-scan-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(to right, transparent, var(--primary-gold), transparent);
+  box-shadow: 0 0 15px var(--primary-gold);
+  animation: scanMove 3s ease-in-out infinite;
+  opacity: 0;
+}
+
+.fv-scanning .fv-scan-line {
+  opacity: 1;
+}
+
+@keyframes scanMove {
+  0% {
+    top: 10%;
+  }
+
+  50% {
+    top: 90%;
+  }
+
+  100% {
+    top: 10%;
+  }
+}
+
+.fv-face-guide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 70%;
+  height: 80%;
+  border: 2px dashed rgba(200, 157, 60, 0.4);
+  border-radius: 50% 50% 45% 45%;
+  animation: pulseGuide 2s ease-in-out infinite;
+}
+
+@keyframes pulseGuide {
+
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  50% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(1.02);
+  }
+}
+
+/* Liveness Indicator */
+.fv-liveness-box {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 51, 102, 0.8);
+  padding: 8px 16px;
+  border-radius: 20px;
+  color: var(--text-light);
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid var(--primary-gold);
+  z-index: 10;
+  white-space: nowrap;
+}
+
+/* Success/Error Overlays */
+.fv-status-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  transition: all 0.3s ease;
+}
+
+.fv-status-overlay.success {
+  background: rgba(46, 204, 113, 0.2);
+}
+
+.fv-status-overlay.error {
+  background: rgba(231, 76, 60, 0.2);
+}
+
+/* Steps Indicator */
+.fv-steps {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.fv-step {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--glass-border);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fv-step.active {
+  background: var(--primary-gold);
+  box-shadow: 0 0 10px var(--primary-gold);
+  transform: scale(1.2);
+}
+
+.fv-step.completed {
+  background: var(--success-green);
+}
+
+/* Message & Spinner */
+.fv-message-container {
+  margin-bottom: 30px;
+  min-height: 48px;
+}
+
+.fv-message {
+  font-size: 1.1rem;
+  color: var(--text-light);
+  font-weight: 500;
+}
+
+.fv-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--primary-gold);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 12px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Buttons */
+.fv-btn {
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.fv-btn--primary {
+  background: linear-gradient(135deg, var(--primary-gold), #b3882d);
+  color: #000;
+}
+
+.fv-btn--primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(200, 157, 60, 0.3);
+}
+
+.fv-btn--secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-light);
+  border: 1px solid var(--glass-border);
+}
+
+.fv-btn--secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.fv-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fv-security-footer {
+  margin-top: 24px;
+  font-size: 0.8rem;
+  color: #4b5563;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}

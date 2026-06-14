@@ -1,0 +1,107 @@
+# alert_rules.yml — Règles d'Alertes Prometheus (Finding MON-01 — Audit Bancaire)
+# Conformité ISO 27001 A.16.1.2 | DORA Art. 17 — MTTD cible ≤ 5 min
+
+groups:
+  - name: banking_platform_critical
+    rules:
+
+      # ── DISPONIBILITÉ ─────────────────────────────────────────────
+      - alert: InstanceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: sre
+        annotations:
+          summary: "🔴 Instance DOWN : {{ $labels.instance }}"
+          description: "Le service {{ $labels.job }} sur {{ $labels.instance }} est DOWN depuis plus de 1 minute. Action P1 requise."
+
+      - alert: BackendAPIDown
+        expr: up{job="fastapi-api"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 API Backend FastAPI DOWN"
+          description: "L'API bancaire principale est inaccessible. Déclencher le PCA immédiatement."
+
+      - alert: MongoDBDown
+        expr: up{job="mongodb"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 MongoDB DOWN"
+          description: "La base de données MongoDB est inaccessible. RPO/RTO en danger."
+
+      # ── ERREURS HTTP ───────────────────────────────────────────────
+      - alert: HighHTTP5xxErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum(rate(http_requests_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: high
+        annotations:
+          summary: "🟠 Taux d'erreurs 5xx élevé (> 5%)"
+          description: "Le taux d'erreurs serveur dépasse 5% sur les 5 dernières minutes. Impact client potentiel."
+
+      - alert: HighHTTP4xxErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"4.."}[5m]))
+          /
+          sum(rate(http_requests_total[5m])) > 0.20
+        for: 5m
+        labels:
+          severity: medium
+        annotations:
+          summary: "🟡 Taux d'erreurs 4xx élevé (> 20%)"
+          description: "Possible attaque par brute-force ou bug client. Vérifier les logs d'accès."
+
+      # ── LATENCE ────────────────────────────────────────────────────
+      - alert: HighAPILatency
+        expr: |
+          histogram_quantile(0.99, 
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 2
+        for: 3m
+        labels:
+          severity: high
+        annotations:
+          summary: "🟠 Latence API P99 > 2 secondes"
+          description: "Le 99ème percentile de latence dépasse 2 secondes. SLA bancaire (< 500ms) en danger."
+
+      # ── RESSOURCES ─────────────────────────────────────────────────
+      - alert: HighMemoryUsage
+        expr: |
+          (container_memory_usage_bytes / container_spec_memory_limit_bytes) > 0.85
+        for: 5m
+        labels:
+          severity: medium
+        annotations:
+          summary: "🟡 Mémoire conteneur > 85%"
+          description: "Le conteneur {{ $labels.container_name }} utilise > 85% de sa mémoire allouée."
+
+      # ── SÉCURITÉ ───────────────────────────────────────────────────
+      - alert: BruteForceLoginDetected
+        expr: |
+          rate(http_requests_total{path="/api/login", status="401"}[1m]) > 5
+        for: 1m
+        labels:
+          severity: critical
+          team: soc
+        annotations:
+          summary: "🔴 Tentatives de brute-force détectées sur /api/login"
+          description: "Plus de 5 tentatives échouées par minute sur l'endpoint de login. Activer le blocage IP."
+
+      - alert: AnomalousRequestVolume
+        expr: |
+          sum(rate(http_requests_total[1m])) > 1000
+        for: 2m
+        labels:
+          severity: high
+          team: soc
+        annotations:
+          summary: "🟠 Volume de requêtes anormal (> 1000 req/min)"
+          description: "Possible attaque DDoS ou comportement anormal. Vérifier les règles de rate limiting Nginx."

@@ -1,0 +1,220 @@
+# docker-compose.prod.yml — Environnement de Production
+# Finding GOV-03 (Audit Bancaire) : Ségrégation DEV / UAT / PROD
+#
+# Usage : docker compose -f docker-compose.prod.yml up -d
+# Caractéristiques PROD :
+#   - MongoDB Replica Set (3 nœuds — Finding ARCH-01)
+#   - Scale backend=2 par défaut
+#   - Secrets via Docker Secrets / variables d'env injectées (jamais .env)
+#   - Monitoring complet (tous les exporters)
+#   - Logs JSON structurés vers Loki
+#   - Pas de ports DB exposés (réseau interne strict)
+#   - TLS avec certificats institutionnels
+
+services:
+  nginx:
+    image: nginx:1.25-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Load_Balencer+Health_check/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs/prod:/etc/nginx/certs:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - prod-frontend
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  backend:
+    build:
+      context: ./backend
+    # En prod, JAMAIS de env_file avec secrets en clair
+    # Utiliser Docker Secrets ou variables injectées par l'orchestrateur
+    environment:
+      - ENV=prod
+      - MONGO_URL=mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=rs0
+      - DATABASE_NAME=${DATABASE_NAME}
+      - SECRET_KEY=${SECRET_KEY}
+      - LOG_SIGNING_KEY=${LOG_SIGNING_KEY}
+      - DATA_ENCRYPTION_KEY=${DATA_ENCRYPTION_KEY}
+      - RSA_PRIVATE_KEY=${RSA_PRIVATE_KEY}
+      - RSA_PUBLIC_KEY=${RSA_PUBLIC_KEY}
+      - DEFAULT_ADMIN_EMAIL=${DEFAULT_ADMIN_EMAIL}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - REQUIRE_S3_ARCHIVE_BEFORE_PURGE=true
+      - VAULT_ENABLED=${VAULT_ENABLED:-false}
+      - VAULT_ADDR=${VAULT_ADDR}
+      - VAULT_TOKEN=${VAULT_TOKEN}
+    networks:
+      - prod-frontend
+      - prod-database
+    depends_on:
+      mongo1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: always
+    deploy:
+      replicas: 2             # 2 réplicas par défaut (scale horizontal)
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+
+  # ── MongoDB Replica Set — Finding ARCH-01 ────────────────────────────────
+  # Minimum 3 nœuds pour la haute disponibilité (Primary + Secondary + Arbiter)
+  mongo1:
+    image: mongo:6.0
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - prod_mongo1_data:/data/db
+    networks:
+      - prod-database
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "rs.status().ok || db.adminCommand('ping').ok"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    restart: always
+
+  mongo2:
+    image: mongo:6.0
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - prod_mongo2_data:/data/db
+    networks:
+      - prod-database
+    restart: always
+
+  mongo3:
+    image: mongo:6.0
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - prod_mongo3_data:/data/db
+    networks:
+      - prod-database
+    restart: always
+
+  # Initialisation du Replica Set (s'exécute une seule fois)
+  mongo-init:
+    image: mongo:6.0
+    depends_on:
+      - mongo1
+      - mongo2
+      - mongo3
+    command: >
+      mongosh --host mongo1 --eval
+      "rs.initiate({
+        _id: 'rs0',
+        members: [
+          {_id: 0, host: 'mongo1:27017', priority: 2},
+          {_id: 1, host: 'mongo2:27017', priority: 1},
+          {_id: 2, host: 'mongo3:27017', arbiterOnly: true}
+        ]
+      })"
+    networks:
+      - prod-database
+
+  # ── Monitoring Stack Complète ────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./Monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./Monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prod_prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=90d'
+    networks:
+      - prod-monitoring
+      - prod-frontend
+    restart: always
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    volumes:
+      - ./Monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    networks:
+      - prod-monitoring
+    restart: always
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+    volumes:
+      - prod_grafana_data:/var/lib/grafana
+    networks:
+      - prod-monitoring
+    restart: always
+
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.40
+    command: ['--mongodb.uri=mongodb://mongo1:27017', '--collect-all']
+    networks:
+      - prod-monitoring
+      - prod-database
+    restart: always
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - prod-monitoring
+    restart: always
+
+  loki:
+    image: grafana/loki:latest
+    volumes:
+      - prod_loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - prod-monitoring
+    restart: always
+
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    networks:
+      - prod-monitoring
+    restart: always
+
+networks:
+  prod-frontend:
+    driver: bridge
+  prod-database:
+    driver: bridge
+    internal: true          # Jamais accessible depuis l'extérieur
+  prod-monitoring:
+    driver: bridge
+    internal: true
+
+volumes:
+  prod_mongo1_data:
+  prod_mongo2_data:
+  prod_mongo3_data:
+  prod_prometheus_data:
+  prod_grafana_data:
+  prod_loki_data:

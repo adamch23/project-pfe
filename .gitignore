@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+ENV/
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Secrets & Config
+.env
+.env.*
+!.env.example
+certs/
+*.pem
+*.key
+
+# Database & Storage
+mongodb_data/
+backup_data/
+prometheus_data/
+grafana_data/
+logs_data/
+*.db
+*.sqlite3
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific
+backend/app/IA_anomaly_detection/Firewall_info/
+backend/app/IA_anomaly_detection/DB_info/
+backend/app/IA_anomaly_detection/OS_info/
+backend/app/IA_anomaly_detection/App_info/
+backend/app/IA_anomaly_detection/API_info/
+backend/app/IA_anomaly_detection/.pipeline_done
+*.csv
+!backend/app/IA_anomaly_detection/*.csv 
+
+# Logs
+*.log
+backend/server.log
+
+# System
+$RECYCLE.BIN/
+System Volume Information/
+Ressource Monitoring/
+node_modules/
+**/node_modules/
