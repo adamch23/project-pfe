@@ -7,7 +7,7 @@
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # ── API Framework ──────────────────────────────────────────────────
-fastapi==0.115.8
+fastapi==0.116.0
 uvicorn[standard]==0.32.1
 python-multipart==0.0.27
 
@@ -18,9 +18,10 @@ motor==3.6.0
 pydantic[email]==2.10.3
 
 # ── Sécurité & Cryptographie ───────────────────────────────────────
-cryptography==46.0.6
+cryptography==46.0.7
 python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
+pyasn1>=0.6.3
 
 # ── HTTP Client ────────────────────────────────────────────────────
 httpx==0.28.0
